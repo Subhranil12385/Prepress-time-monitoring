@@ -129,6 +129,9 @@
       transition: 0.3s;
       font-weight: 600;
       color: #495057;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .press-btn.active {
@@ -141,6 +144,35 @@
     .press-btn:hover {
       transform: translateY(-2px);
       box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .status-working {
+      background: #28a745;
+      animation: flash 1s ease-in-out infinite;
+      box-shadow: 0 0 8px #28a745;
+    }
+
+    .status-idle {
+      background: #dc3545;
+      box-shadow: 0 0 4px #dc3545;
+    }
+
+    @keyframes flash {
+      0%, 100% {
+        opacity: 1;
+        box-shadow: 0 0 8px #28a745;
+      }
+      50% {
+        opacity: 0.3;
+        box-shadow: 0 0 4px #28a745;
+      }
     }
 
     .section {
@@ -215,8 +247,25 @@
     }
 
     tbody tr:hover {
-      background: #f8f9fa;
       transform: scale(1.01);
+    }
+
+    tbody tr.in-progress {
+      background: linear-gradient(90deg, rgba(33, 150, 243, 0.3), rgba(33, 150, 243, 0));
+      animation: flash-blue 2s ease-in-out infinite;
+    }
+
+    @keyframes flash-blue {
+      0%, 100% {
+        background: linear-gradient(90deg, rgba(33, 150, 243, 0.3), rgba(33, 150, 243, 0));
+      }
+      50% {
+        background: linear-gradient(90deg, rgba(33, 150, 243, 0.5), rgba(33, 150, 243, 0.1));
+      }
+    }
+
+    tbody tr.success {
+      background: linear-gradient(90deg, rgba(40, 167, 69, 0.2), rgba(40, 167, 69, 0));
     }
 
     tbody tr.warning {
@@ -243,6 +292,15 @@
     .duration {
       font-weight: 700;
       font-size: 1.1em;
+    }
+
+    .duration.success {
+      color: #28a745;
+    }
+
+    .duration.in-progress {
+      color: #2196f3;
+      font-weight: 700;
     }
 
     .duration.normal {
@@ -289,8 +347,14 @@
     .stat-card h3 {
       color: #6c757d;
       font-size: 0.9em;
-      margin-bottom: 10px;
+      margin-bottom: 5px;
       text-transform: uppercase;
+    }
+
+    .stat-card .subtitle {
+      color: #9ca3af;
+      font-size: 0.7em;
+      margin-bottom: 10px;
     }
 
     .stat-card .value {
@@ -361,11 +425,8 @@
       </div>
       <div class="stat-card">
         <h3>Below 30 Min</h3>
+        <div class="subtitle">±10 sec</div>
         <div class="value" id="belowThirty">0</div>
-      </div>
-      <div class="stat-card">
-        <h3>Above 30 Min</h3>
-        <div class="value" id="aboveThirty">0</div>
       </div>
     </div>
 
@@ -404,6 +465,7 @@
 
     let currentPress = 1;
     let allData = [];
+    let pressStatusData = {};
 
     document.addEventListener("DOMContentLoaded", () => {
       updateDateTime();
@@ -414,7 +476,13 @@
       document.getElementById("toDate").value = today;
 
       initPressButtons();
+      
+      // Load Press 1 data immediately on page load
       loadData();
+      
+      // Then load status for all presses
+      loadAllPressesStatus();
+      setInterval(loadAllPressesStatus, 30000);
     });
 
     function updateDateTime() {
@@ -437,9 +505,17 @@
       const pressContainer = document.getElementById("pressButtons");
       for (let i = 1; i <= 5; i++) {
         const btn = document.createElement("button");
-        btn.textContent = `Press ${i}`;
         btn.className = `press-btn${i === 1 ? " active" : ""}`;
         btn.onclick = () => selectPress(i);
+        
+        const indicator = document.createElement("span");
+        indicator.className = "status-indicator status-idle";
+        indicator.id = `status-indicator-${i}`;
+        
+        const text = document.createTextNode(`Press ${i}`);
+        
+        btn.appendChild(indicator);
+        btn.appendChild(text);
         pressContainer.appendChild(btn);
       }
     }
@@ -451,6 +527,42 @@
       });
       document.getElementById("pressTitle").textContent = `Pre Press - ${pressNum}`;
       loadData();
+    }
+
+    async function loadAllPressesStatus() {
+      const today = new Date().toISOString().split("T")[0];
+      
+      for (let i = 1; i <= 5; i++) {
+        try {
+          const url = `${SCRIPT_URL}?action=getData&press=${i}&fromDate=${today}&toDate=${today}`;
+          const response = await fetch(url);
+          const data = await response.json();
+          
+          const records = data.records || [];
+          pressStatusData[i] = records;
+          
+          updatePressIndicator(i, records);
+        } catch (err) {
+          console.error(`Error loading status for press ${i}:`, err);
+        }
+      }
+    }
+
+    function updatePressIndicator(pressNum, records) {
+      const indicator = document.getElementById(`status-indicator-${pressNum}`);
+      if (!indicator) return;
+      
+      if (records.length > 0) {
+        const latestRecord = records[0];
+        
+        if (!latestRecord.endTime || latestRecord.endTime.trim() === '') {
+          indicator.className = 'status-indicator status-working';
+        } else {
+          indicator.className = 'status-indicator status-idle';
+        }
+      } else {
+        indicator.className = 'status-indicator status-idle';
+      }
     }
 
     async function loadData() {
@@ -472,6 +584,8 @@
         allData = data.records || [];
         displayData(allData);
         updateStats(allData);
+        
+        updatePressIndicator(currentPress, allData);
       } catch (err) {
         console.error("Error loading data:", err);
         alert("Error loading data. Check script deployment.");
@@ -493,25 +607,50 @@
       document.getElementById("noDataContainer").style.display = "none";
       document.getElementById("dataTable").style.display = "table";
 
-      records.forEach((rec) => {
+      records.forEach((rec, index) => {
         const tr = document.createElement("tr");
-        const durMins = parseDuration(rec.duration);
-        let cls = "",
-          dCls = "normal";
-        if (durMins < 25) (cls = "danger"), (dCls = "danger");
-        else if (durMins < 30) (cls = "warning"), (dCls = "warning");
+        
+        // Check if this is the first row and has no end time (in progress)
+        const isInProgress = index === 0 && (!rec.endTime || rec.endTime.trim() === '');
+        
+        let cls = "", dCls = "normal";
+        
+        if (isInProgress) {
+          cls = "in-progress";
+          dCls = "in-progress";
+        } else {
+          const durMins = parseDuration(rec.duration);
+          const durSeconds = durMins * 60;
+          
+          // 29:50 and above - Success with green (including 30+ minutes)
+          if (durSeconds >= 1790) {
+            cls = "success";
+            dCls = "success";
+          }
+          // Less than 25 minutes - Danger
+          else if (durMins < 25) {
+            cls = "danger";
+            dCls = "danger";
+          }
+          // 25 to 29:50 - Warning
+          else {
+            cls = "warning";
+            dCls = "warning";
+          }
+        }
 
         tr.className = cls;
         tr.innerHTML = `
           <td>${rec.date}</td>
           <td>${rec.startTime}</td>
-          <td>${rec.endTime}</td>
-          <td class="duration ${dCls}">${rec.duration}</td>`;
+          <td>${rec.endTime || 'Pressing'}</td>
+          <td class="duration ${dCls}">${rec.duration || 'Pressing'}</td>`;
         tbody.appendChild(tr);
       });
     }
 
     function parseDuration(d) {
+      if (!d) return 0;
       const p = d.split(":");
       return parseInt(p[0]) + parseInt(p[1]) / 60;
     }
@@ -521,28 +660,38 @@
       if (!records.length) {
         document.getElementById("avgDuration").textContent = "0:00";
         document.getElementById("belowThirty").textContent = "0";
-        document.getElementById("aboveThirty").textContent = "0";
         return;
       }
 
-      let total = 0,
-        below = 0,
-        above = 0;
-      records.forEach((r) => {
+      // Filter out in-progress records (those without end time)
+      const completedRecords = records.filter(r => r.endTime && r.endTime.trim() !== '');
+
+      if (completedRecords.length === 0) {
+        document.getElementById("avgDuration").textContent = "0:00";
+        document.getElementById("belowThirty").textContent = "0";
+        return;
+      }
+
+      let total = 0, below = 0;
+      
+      completedRecords.forEach((r) => {
         const m = parseDuration(r.duration);
+        const seconds = m * 60;
         total += m;
-        if (m < 30) below++;
-        else above++;
+        
+        // Count as "below" if less than 29:50 (below the acceptable range)
+        if (seconds < 1790) {
+          below++;
+        }
       });
 
-      const avg = total / records.length;
-      const m = Math.floor(avg),
-        s = Math.round((avg - m) * 60);
+      const avg = total / completedRecords.length;
+      const m = Math.floor(avg);
+      const s = Math.round((avg - m) * 60);
       document.getElementById("avgDuration").textContent = `${m}:${s
         .toString()
         .padStart(2, "0")}`;
       document.getElementById("belowThirty").textContent = below;
-      document.getElementById("aboveThirty").textContent = above;
     }
 
     function showLoading(show) {
@@ -560,7 +709,733 @@
       let csv = "DATE,START TIME,END TIME,PRESS DURATION\n";
       allData.forEach(
         (r) =>
-          (csv += `${r.date},${r.startTime},${r.endTime},${r.duration}\n`)
+          (csv += `${r.date},${r.startTime},${r.endTime || 'Pressing'},${r.duration || 'Pressing'}\n`)
+      );
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Press_${currentPress}_Data_${new Date()
+        .toISOString()
+        .split("T")[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pre Press Monitoring System</title>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 15px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .header {
+      background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+      padding: 30px;
+      text-align: center;
+    }
+
+    .header h1 {
+      color: white;
+      font-size: 2.5em;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+      margin-bottom: 10px;
+    }
+
+    .datetime {
+      color: white;
+      font-size: 1.2em;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    .controls {
+      background: #f8f9fa;
+      padding: 25px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      align-items: center;
+      border-bottom: 3px solid #e9ecef;
+    }
+
+    .control-group {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .control-group label {
+      font-weight: 600;
+      color: #495057;
+    }
+
+    input[type="date"] {
+      padding: 10px 15px;
+      border: 2px solid #dee2e6;
+      border-radius: 8px;
+      font-size: 1em;
+      transition: 0.3s;
+    }
+
+    input[type="date"]:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      outline: none;
+    }
+
+    .btn {
+      padding: 12px 30px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.3s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-view {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      color: white;
+    }
+
+    .btn-view:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+    }
+
+    .btn-export {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-export:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .press-selector {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .press-btn {
+      padding: 10px 20px;
+      border: 2px solid #dee2e6;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      transition: 0.3s;
+      font-weight: 600;
+      color: #495057;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .press-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-color: #667eea;
+      transform: scale(1.05);
+    }
+
+    .press-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .status-working {
+      background: #28a745;
+      animation: flash 1s ease-in-out infinite;
+      box-shadow: 0 0 8px #28a745;
+    }
+
+    .status-idle {
+      background: #dc3545;
+      box-shadow: 0 0 4px #dc3545;
+    }
+
+    @keyframes flash {
+      0%, 100% {
+        opacity: 1;
+        box-shadow: 0 0 8px #28a745;
+      }
+      50% {
+        opacity: 0.3;
+        box-shadow: 0 0 4px #28a745;
+      }
+    }
+
+    .section {
+      background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+      padding: 20px 30px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .section h2 {
+      color: white;
+      font-size: 2em;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #6c757d;
+      font-size: 1.2em;
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .table-container {
+      padding: 30px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    thead {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    thead th {
+      color: white;
+      padding: 18px;
+      text-align: left;
+      font-size: 1.1em;
+      text-transform: uppercase;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #e9ecef;
+      transition: 0.3s;
+    }
+
+    tbody tr:hover {
+      transform: scale(1.01);
+    }
+
+    tbody tr.in-progress {
+      background: linear-gradient(90deg, rgba(33, 150, 243, 0.3), rgba(33, 150, 243, 0));
+      animation: flash-blue 2s ease-in-out infinite;
+    }
+
+    @keyframes flash-blue {
+      0%, 100% {
+        background: linear-gradient(90deg, rgba(33, 150, 243, 0.3), rgba(33, 150, 243, 0));
+      }
+      50% {
+        background: linear-gradient(90deg, rgba(33, 150, 243, 0.5), rgba(33, 150, 243, 0.1));
+      }
+    }
+
+    tbody tr.success {
+      background: linear-gradient(90deg, rgba(40, 167, 69, 0.2), rgba(40, 167, 69, 0));
+    }
+
+    tbody tr.warning {
+      background: linear-gradient(90deg, rgba(255, 193, 7, 0.2), rgba(255, 193, 7, 0));
+    }
+
+    tbody tr.danger {
+      background: linear-gradient(90deg, rgba(220, 53, 69, 0.3), rgba(220, 53, 69, 0));
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      50% {
+        opacity: 0.8;
+      }
+    }
+
+    tbody td {
+      padding: 15px 18px;
+      color: #495057;
+      font-size: 1em;
+    }
+
+    .duration {
+      font-weight: 700;
+      font-size: 1.1em;
+    }
+
+    .duration.success {
+      color: #28a745;
+    }
+
+    .duration.in-progress {
+      color: #2196f3;
+      font-weight: 700;
+    }
+
+    .duration.normal {
+      color: #28a745;
+    }
+
+    .duration.warning {
+      color: #ffc107;
+    }
+
+    .duration.danger {
+      color: #dc3545;
+    }
+
+    .no-data {
+      text-align: center;
+      padding: 60px 20px;
+      color: #6c757d;
+      font-size: 1.2em;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      padding: 30px;
+      background: #f8f9fa;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+      transition: 0.3s;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-card h3 {
+      color: #6c757d;
+      font-size: 0.9em;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+    }
+
+    .stat-card .subtitle {
+      color: #9ca3af;
+      font-size: 0.7em;
+      margin-bottom: 10px;
+    }
+
+    .stat-card .value {
+      font-size: 2em;
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 1.8em;
+      }
+
+      .controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .control-group {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .press-selector {
+        justify-content: center;
+      }
+
+      table {
+        font-size: 0.9em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Pre Press Monitoring System</h1>
+      <div class="datetime" id="currentDateTime"></div>
+    </div>
+
+    <div class="controls">
+      <div class="control-group">
+        <label>From Date:</label>
+        <input type="date" id="fromDate" />
+      </div>
+      <div class="control-group">
+        <label>To Date:</label>
+        <input type="date" id="toDate" />
+      </div>
+      <button class="btn btn-view" onclick="loadData()">VIEW</button>
+    </div>
+
+    <div class="controls">
+      <div class="control-group">
+        <label>Select Press:</label>
+        <div class="press-selector" id="pressButtons"></div>
+      </div>
+    </div>
+
+    <div class="stats" id="statsContainer">
+      <div class="stat-card">
+        <h3>Total Presses</h3>
+        <div class="value" id="totalPresses">0</div>
+      </div>
+      <div class="stat-card">
+        <h3>Average Duration</h3>
+        <div class="value" id="avgDuration">0:00</div>
+      </div>
+      <div class="stat-card">
+        <h3>Below 30 Min</h3>
+        <div class="subtitle">±10 sec</div>
+        <div class="value" id="belowThirty">0</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <h2 id="pressTitle">Pre Press - 1</h2>
+        <button class="btn btn-export" onclick="exportToExcel()">Export To Excel</button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <div id="loadingContainer" class="loading">
+        <div class="spinner"></div>
+        <p>Loading data...</p>
+      </div>
+      <table id="dataTable" style="display: none">
+        <thead>
+          <tr>
+            <th>DATE</th>
+            <th>START TIME</th>
+            <th>END TIME</th>
+            <th>PRESS DURATION</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div id="noDataContainer" class="no-data" style="display: none">
+        <p>No data available for the selected date range.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SCRIPT_URL =
+      "https://script.google.com/macros/s/AKfycbyr8sSqhIin24puQuzh0yN4I1tJ5TXecoJPWBZPgiZ2toWy6Mk1HqtZxAO12cmAECqg/exec";
+
+    let currentPress = 1;
+    let allData = [];
+    let pressStatusData = {};
+
+    document.addEventListener("DOMContentLoaded", () => {
+      updateDateTime();
+      setInterval(updateDateTime, 1000);
+
+      const today = new Date().toISOString().split("T")[0];
+      document.getElementById("fromDate").value = today;
+      document.getElementById("toDate").value = today;
+
+      initPressButtons();
+      
+      // Load Press 1 data immediately on page load
+      loadData();
+      
+      // Then load status for all presses
+      loadAllPressesStatus();
+      setInterval(loadAllPressesStatus, 30000);
+    });
+
+    function updateDateTime() {
+      const now = new Date();
+      document.getElementById("currentDateTime").textContent = now.toLocaleString(
+        "en-US",
+        {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }
+      );
+    }
+
+    function initPressButtons() {
+      const pressContainer = document.getElementById("pressButtons");
+      for (let i = 1; i <= 5; i++) {
+        const btn = document.createElement("button");
+        btn.className = `press-btn${i === 1 ? " active" : ""}`;
+        btn.onclick = () => selectPress(i);
+        
+        const indicator = document.createElement("span");
+        indicator.className = "status-indicator status-idle";
+        indicator.id = `status-indicator-${i}`;
+        
+        const text = document.createTextNode(`Press ${i}`);
+        
+        btn.appendChild(indicator);
+        btn.appendChild(text);
+        pressContainer.appendChild(btn);
+      }
+    }
+
+    function selectPress(pressNum) {
+      currentPress = pressNum;
+      document.querySelectorAll(".press-btn").forEach((btn, i) => {
+        btn.classList.toggle("active", i + 1 === pressNum);
+      });
+      document.getElementById("pressTitle").textContent = `Pre Press - ${pressNum}`;
+      loadData();
+    }
+
+    async function loadAllPressesStatus() {
+      const today = new Date().toISOString().split("T")[0];
+      
+      for (let i = 1; i <= 5; i++) {
+        try {
+          const url = `${SCRIPT_URL}?action=getData&press=${i}&fromDate=${today}&toDate=${today}`;
+          const response = await fetch(url);
+          const data = await response.json();
+          
+          const records = data.records || [];
+          pressStatusData[i] = records;
+          
+          updatePressIndicator(i, records);
+        } catch (err) {
+          console.error(`Error loading status for press ${i}:`, err);
+        }
+      }
+    }
+
+    function updatePressIndicator(pressNum, records) {
+      const indicator = document.getElementById(`status-indicator-${pressNum}`);
+      if (!indicator) return;
+      
+      if (records.length > 0) {
+        const latestRecord = records[0];
+        
+        if (!latestRecord.endTime || latestRecord.endTime.trim() === '') {
+          indicator.className = 'status-indicator status-working';
+        } else {
+          indicator.className = 'status-indicator status-idle';
+        }
+      } else {
+        indicator.className = 'status-indicator status-idle';
+      }
+    }
+
+    async function loadData() {
+      const fromDate = document.getElementById("fromDate").value;
+      const toDate = document.getElementById("toDate").value;
+
+      if (!fromDate || !toDate) {
+        alert("Please select both dates");
+        return;
+      }
+
+      showLoading(true);
+
+      try {
+        const url = `${SCRIPT_URL}?action=getData&press=${currentPress}&fromDate=${fromDate}&toDate=${toDate}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        allData = data.records || [];
+        displayData(allData);
+        updateStats(allData);
+        
+        updatePressIndicator(currentPress, allData);
+      } catch (err) {
+        console.error("Error loading data:", err);
+        alert("Error loading data. Check script deployment.");
+        showLoading(false);
+      }
+    }
+
+    function displayData(records) {
+      const tbody = document.getElementById("tableBody");
+      tbody.innerHTML = "";
+      showLoading(false);
+
+      if (records.length === 0) {
+        document.getElementById("noDataContainer").style.display = "block";
+        document.getElementById("dataTable").style.display = "none";
+        return;
+      }
+
+      document.getElementById("noDataContainer").style.display = "none";
+      document.getElementById("dataTable").style.display = "table";
+
+      records.forEach((rec, index) => {
+        const tr = document.createElement("tr");
+        
+        // Check if this is the first row and has no end time (in progress)
+        const isInProgress = index === 0 && (!rec.endTime || rec.endTime.trim() === '');
+        
+        let cls = "", dCls = "normal";
+        
+        if (isInProgress) {
+          cls = "in-progress";
+          dCls = "in-progress";
+        } else {
+          const durMins = parseDuration(rec.duration);
+          const durSeconds = durMins * 60;
+          
+          // 29:50 and above - Success with green (including 30+ minutes)
+          if (durSeconds >= 1790) {
+            cls = "success";
+            dCls = "success";
+          }
+          // Less than 25 minutes - Danger
+          else if (durMins < 25) {
+            cls = "danger";
+            dCls = "danger";
+          }
+          // 25 to 29:50 - Warning
+          else {
+            cls = "warning";
+            dCls = "warning";
+          }
+        }
+
+        tr.className = cls;
+        tr.innerHTML = `
+          <td>${rec.date}</td>
+          <td>${rec.startTime}</td>
+          <td>${rec.endTime || 'Pressing'}</td>
+          <td class="duration ${dCls}">${rec.duration || 'Pressing'}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function parseDuration(d) {
+      if (!d) return 0;
+      const p = d.split(":");
+      return parseInt(p[0]) + parseInt(p[1]) / 60;
+    }
+
+    function updateStats(records) {
+      document.getElementById("totalPresses").textContent = records.length;
+      if (!records.length) {
+        document.getElementById("avgDuration").textContent = "0:00";
+        document.getElementById("belowThirty").textContent = "0";
+        return;
+      }
+
+      // Filter out in-progress records (those without end time)
+      const completedRecords = records.filter(r => r.endTime && r.endTime.trim() !== '');
+
+      if (completedRecords.length === 0) {
+        document.getElementById("avgDuration").textContent = "0:00";
+        document.getElementById("belowThirty").textContent = "0";
+        return;
+      }
+
+      let total = 0, below = 0;
+      
+      completedRecords.forEach((r) => {
+        const m = parseDuration(r.duration);
+        const seconds = m * 60;
+        total += m;
+        
+        // Count as "below" if less than 29:50 (below the acceptable range)
+        if (seconds < 1790) {
+          below++;
+        }
+      });
+
+      const avg = total / completedRecords.length;
+      const m = Math.floor(avg);
+      const s = Math.round((avg - m) * 60);
+      document.getElementById("avgDuration").textContent = `${m}:${s
+        .toString()
+        .padStart(2, "0")}`;
+      document.getElementById("belowThirty").textContent = below;
+    }
+
+    function showLoading(show) {
+      document.getElementById("loadingContainer").style.display = show
+        ? "block"
+        : "none";
+    }
+
+    function exportToExcel() {
+      if (!allData.length) {
+        alert("No data to export");
+        return;
+      }
+
+      let csv = "DATE,START TIME,END TIME,PRESS DURATION\n";
+      allData.forEach(
+        (r) =>
+          (csv += `${r.date},${r.startTime},${r.endTime || 'Pressing'},${r.duration || 'Pressing'}\n`)
       );
 
       const blob = new Blob([csv], { type: "text/csv" });
