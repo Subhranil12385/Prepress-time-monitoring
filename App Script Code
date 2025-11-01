@@ -1,0 +1,588 @@
+/**
+ * Robust Apps Script for Pre-press logging with Weekly Email Reports
+ * - Writes Date column as a Date object (if parseable)
+ * - Writes Start Time / End Time / Duration as TEXT (prefix with apostrophe)
+ * - Handles immediate start data updates (isStart parameter)
+ * - Sends weekly email report every Sunday with previous week's data
+ *
+ * Press mapping: Press1 = A:D, Press2 = E:H, Press3 = I:L, Press4 = M:P, Press5 = Q:T
+ */
+
+/* ---------- Configuration ---------- */
+var REPORT_EMAIL = "subhhranilde@gmail.com";
+
+/* ---------- Public endpoints ---------- */
+
+function doPost(e) {
+  try {
+    var params = e.parameter || {};
+    Logger.log('doPost params: ' + JSON.stringify(params));
+
+    var press = parseInt(params.press, 10) || 0;
+    if (press < 1 || press > 5) return jsonError("Invalid press number");
+
+    var dateStr = params.date || "";
+    var startTime = params.startTime || "";
+    var endTime = params.endTime || "";
+    var duration = params.duration || "";
+    var complete = params.complete === "1";
+    var isStart = params.isStart === "1";
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getActiveSheet();
+    var colStart = 1 + (press - 1) * 4; // 1-indexed
+
+    // Try to convert dateStr to a Date object for the sheet
+    var dateObj = parseDateToDateObject(dateStr);
+
+    // Normalize date text (dd/mm/yyyy) for comparisons
+    var normalizedDateText = dateObj ? formatDateDDMMYYYY(dateObj) : tryNormalizeDateString(dateStr || "");
+
+    // Find existing row with same date & startTime (if any)
+    var lastRow = Math.max(sheet.getLastRow(), 2);
+    var dataRows = Math.max(0, lastRow - 2);
+    var targetRow = -1;
+
+    if (dataRows > 0) {
+      var dateRange = sheet.getRange(3, colStart, dataRows, 1).getValues();
+      var startRange = sheet.getRange(3, colStart + 1, dataRows, 1).getValues();
+      for (var i = 0; i < dateRange.length; i++) {
+        var existingDateRaw = dateRange[i][0];
+        var existingStartRaw = startRange[i][0];
+
+        var existingDateStr = stringifyCell(existingDateRaw).trim();
+        var existingStartStr = stringifyCell(existingStartRaw).trim();
+
+        if (existingDateStr === normalizedDateText && existingStartStr === startTime) {
+          targetRow = i + 3;
+          break;
+        }
+      }
+    }
+
+    // If isStart is true and no existing row found, create new row
+    // If isStart is false (update/complete), only proceed if row exists
+    if (targetRow === -1) {
+      if (isStart) {
+        // Create new row for start event
+        targetRow = lastRow + 1;
+      } else {
+        // Update/complete event but no existing row - this shouldn't happen
+        Logger.log("Warning: Update/Complete event but no existing row found");
+        targetRow = lastRow + 1;
+      }
+    }
+
+    // Write Date as a Date object (if parsed). Otherwise write as text
+    if (dateObj) {
+      sheet.getRange(targetRow, colStart).setValue(dateObj);
+      sheet.getRange(targetRow, colStart).setNumberFormat("dd/MM/yyyy");
+    } else {
+      sheet.getRange(targetRow, colStart).setValue("'" + normalizedDateText);
+    }
+
+    // Write Start Time / End Time / Duration as TEXT (prefix apostrophe to avoid auto-parse)
+    sheet.getRange(targetRow, colStart + 1).setValue(startTime ? ("'" + startTime) : "");
+    
+    if (complete && endTime) {
+      // Complete event - write end time and final duration
+      sheet.getRange(targetRow, colStart + 2).setValue("'" + endTime);
+      sheet.getRange(targetRow, colStart + 3).setValue("'" + duration);
+    } else if (isStart) {
+      // Start event - clear end time, write initial duration (0:00)
+      sheet.getRange(targetRow, colStart + 2).setValue("");
+      sheet.getRange(targetRow, colStart + 3).setValue("'" + duration);
+    } else {
+      // Update event - keep end time empty, update duration
+      sheet.getRange(targetRow, colStart + 2).setValue("");
+      sheet.getRange(targetRow, colStart + 3).setValue("'" + duration);
+    }
+
+    SpreadsheetApp.flush();
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      row: targetRow,
+      press: press,
+      isStart: isStart,
+      message: isStart ? "Press started" : (complete ? "Press completed" : "Duration updated")
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    Logger.log("doPost error: " + err.toString());
+    return jsonError(err.toString());
+  }
+}
+
+function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+
+  var startDate = new Date(e.parameter.startDate);
+  var endDate = new Date(e.parameter.endDate);
+  var pressNumber = parseInt(e.parameter.press);
+
+  if (!pressNumber || pressNumber < 1 || pressNumber > 5) {
+    return ContentService.createTextOutput(JSON.stringify({ error: "Invalid press number" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // Each press occupies 4 columns (Date, Start, End, Duration)
+  var startCol = (pressNumber - 1) * 4 + 1;
+  var endCol = startCol + 3;
+
+  var data = sheet.getRange(2, startCol, sheet.getLastRow() - 1, 4).getValues();
+  var filtered = [];
+
+  for (var i = 0; i < data.length; i++) {
+    var row = data[i];
+    var date = new Date(row[0]);
+    if (!isNaN(date) && date >= startDate && date <= endDate) {
+      var startTime = row[1];
+      var endTime = row[2];
+      var duration = row[3];
+
+      // --- Fix duration formatting ---
+      var totalSeconds = 0;
+      if (typeof duration === "number") {
+        totalSeconds = duration * 60;
+      } else if (typeof duration === "string" && duration.includes(":")) {
+        var parts = duration.split(":");
+        totalSeconds = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      }
+
+      var minutes = Math.floor(totalSeconds / 60);
+      var seconds = Math.floor(totalSeconds % 60);
+      var durationStr = Utilities.formatString("%02d:%02d", minutes, seconds);
+
+      filtered.push({
+        date: Utilities.formatDate(date, "Asia/Kolkata", "dd/MM/yyyy"),
+        start: startTime ? Utilities.formatDate(new Date(startTime), "Asia/Kolkata", "HH:mm:ss") : "",
+        end: endTime ? Utilities.formatDate(new Date(endTime), "Asia/Kolkata", "HH:mm:ss") : "",
+        duration: durationStr
+      });
+    }
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(filtered))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/* ---------- Weekly Email Report Function ---------- */
+
+/**
+ * Set up trigger to run this function every Sunday
+ * Go to: Triggers (clock icon) -> Add Trigger -> sendWeeklyReport
+ * Select: Week timer, Every Sunday, 8am-9am
+ */
+function sendWeeklyReport() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getActiveSheet();
+    
+    // Calculate date range for previous week (Monday to Sunday)
+    var today = new Date();
+    var dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    // Calculate last Sunday (end of previous week)
+    var lastSunday = new Date(today);
+    lastSunday.setDate(today.getDate() - dayOfWeek);
+    lastSunday.setHours(23, 59, 59, 999);
+    
+    // Calculate previous Monday (start of previous week)
+    var previousMonday = new Date(lastSunday);
+    previousMonday.setDate(lastSunday.getDate() - 6);
+    previousMonday.setHours(0, 0, 0, 0);
+    
+    var weekStart = formatDateDDMMYYYY(previousMonday);
+    var weekEnd = formatDateDDMMYYYY(lastSunday);
+    
+    // Collect data for all 5 presses
+    var allPressData = [];
+    var hasData = false;
+    
+    for (var press = 1; press <= 5; press++) {
+      var pressData = getDataFromSheetRobust(press, previousMonday, lastSunday);
+      if (pressData.length > 0) {
+        hasData = true;
+        allPressData.push({
+          press: press,
+          data: pressData
+        });
+      }
+    }
+    
+    if (!hasData) {
+      Logger.log("No data for the week " + weekStart + " to " + weekEnd + ". Email not sent.");
+      return;
+    }
+    
+    // Generate email HTML
+    var emailBody = generateWeeklyEmailHTML(allPressData, weekStart, weekEnd);
+    
+    // Send email
+    var subject = "Weekly Press Report: " + weekStart + " to " + weekEnd;
+    MailApp.sendEmail({
+      to: REPORT_EMAIL,
+      subject: subject,
+      htmlBody: emailBody
+    });
+    
+    Logger.log("Weekly report sent successfully to " + REPORT_EMAIL);
+    
+  } catch (err) {
+    Logger.log("Error sending weekly report: " + err.toString());
+    // Optionally send error notification email
+    MailApp.sendEmail({
+      to: REPORT_EMAIL,
+      subject: "Error: Weekly Press Report Failed",
+      body: "Failed to generate weekly report. Error: " + err.toString()
+    });
+  }
+}
+
+/* ---------- Generate Email HTML ---------- */
+
+function generateWeeklyEmailHTML(allPressData, weekStart, weekEnd) {
+  var html = '<html><head><style>';
+  html += 'body { font-family: Arial, sans-serif; margin: 20px; color: #333; }';
+  html += 'h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }';
+  html += 'h2 { color: #34495e; margin-top: 30px; border-bottom: 2px solid #95a5a6; padding-bottom: 5px; }';
+  html += 'table { border-collapse: collapse; width: 100%; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }';
+  html += 'th { background-color: #3498db; color: white; padding: 12px; text-align: left; font-weight: bold; }';
+  html += 'td { padding: 10px; border-bottom: 1px solid #ddd; }';
+  html += 'tr:hover { background-color: #f5f5f5; }';
+  html += 'tr:nth-child(even) { background-color: #f9f9f9; }';
+  html += '.summary { background-color: #ecf0f1; padding: 15px; border-radius: 5px; margin: 20px 0; }';
+  html += '.summary-item { margin: 8px 0; font-size: 16px; }';
+  html += '.summary-label { font-weight: bold; color: #2c3e50; }';
+  html += '.footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #bdc3c7; color: #7f8c8d; font-size: 12px; }';
+  html += '.incomplete { color: #e74c3c; font-weight: bold; }';
+  html += '.complete { color: #27ae60; }';
+  html += '</style></head><body>';
+  
+  html += '<h1>📊 Weekly Press Monitor Report</h1>';
+  html += '<p style="font-size: 16px; color: #555;">Report Period: <strong>' + weekStart + '</strong> to <strong>' + weekEnd + '</strong></p>';
+  
+  // Generate summary statistics
+  var totalCycles = 0;
+  var totalDurationMinutes = 0;
+  
+  for (var i = 0; i < allPressData.length; i++) {
+    var pressInfo = allPressData[i];
+    totalCycles += pressInfo.data.length;
+    
+    for (var j = 0; j < pressInfo.data.length; j++) {
+      var duration = pressInfo.data[j].duration;
+      if (duration) {
+        var parts = duration.split(':');
+        if (parts.length >= 2) {
+          totalDurationMinutes += parseInt(parts[0]) || 0;
+        }
+      }
+    }
+  }
+  
+  html += '<div class="summary">';
+  html += '<div class="summary-item"><span class="summary-label">Total Presses Active:</span> ' + allPressData.length + ' out of 5</div>';
+  html += '<div class="summary-item"><span class="summary-label">Total Cycles:</span> ' + totalCycles + '</div>';
+  html += '<div class="summary-item"><span class="summary-label">Total Operating Time:</span> ' + Math.floor(totalDurationMinutes / 60) + ' hours ' + (totalDurationMinutes % 60) + ' minutes</div>';
+  html += '</div>';
+  
+  // Generate tables for each press
+  for (var i = 0; i < allPressData.length; i++) {
+    var pressInfo = allPressData[i];
+    var press = pressInfo.press;
+    var data = pressInfo.data;
+    
+    html += '<h2>Press ' + press + ' (' + data.length + ' cycles)</h2>';
+    html += '<table>';
+    html += '<tr><th>Date</th><th>Start Time</th><th>End Time</th><th>Duration</th><th>Status</th></tr>';
+    
+    for (var j = 0; j < data.length; j++) {
+      var row = data[j];
+      var isComplete = row.endTime && row.endTime.trim() !== "";
+      var statusClass = isComplete ? 'complete' : 'incomplete';
+      var statusText = isComplete ? '✓ Complete' : '⚠ Ongoing';
+      
+      html += '<tr>';
+      html += '<td>' + row.date + '</td>';
+      html += '<td>' + row.startTime + '</td>';
+      html += '<td>' + (row.endTime || '-') + '</td>';
+      html += '<td>' + (row.duration || '-') + '</td>';
+      html += '<td class="' + statusClass + '">' + statusText + '</td>';
+      html += '</tr>';
+    }
+    
+    html += '</table>';
+  }
+  
+  html += '<div class="footer">';
+  html += '<p>This is an automated report generated by Century Plywood Press Monitor System.</p>';
+  html += '<p>Report generated on: ' + Utilities.formatDate(new Date(), "Asia/Kolkata", "dd/MM/yyyy HH:mm:ss") + ' IST</p>';
+  html += '</div>';
+  
+  html += '</body></html>';
+  
+  return html;
+}
+
+/* ---------- Data retrieval with robust handling ---------- */
+
+function getDataFromSheetRobust(press, fromDate, toDate) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  var colStart = 1 + (press - 1) * 4;
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 3) return [];
+
+  var numRows = lastRow - 2;
+  var values = sheet.getRange(3, colStart, numRows, 4).getValues();
+
+  var out = [];
+
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    var rawDate = row[0];
+    var rawStart = row[1];
+    var rawEnd = row[2];
+    var rawDuration = row[3];
+
+    var dateObj = parseSheetDate(rawDate);
+    if (!dateObj) continue;
+
+    if (dateObj < fromDate || dateObj > toDate) continue;
+
+    var startStr = formatCellTimeToString(rawStart, true);
+    var endStr = formatCellTimeToString(rawEnd, true);
+    var durationStr = formatCellDurationToString(rawDuration);
+
+    out.push({
+      date: formatDateDDMMYYYY(dateObj),
+      startTime: startStr,
+      endTime: endStr,
+      duration: durationStr
+    });
+  }
+
+  // sort newest first
+  out.sort(function(a, b) {
+    var da = parseDateForSort(a.date, a.startTime);
+    var db = parseDateForSort(b.date, b.startTime);
+    return db - da;
+  });
+
+  return out;
+}
+
+/* ---------- One-time normalization utility ---------- */
+
+function normalizeExistingSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 3) {
+    Logger.log("No data rows found");
+    return;
+  }
+
+  var lastCol = sheet.getLastColumn();
+  var maxCol = Math.min(lastCol, 20);
+  var values = sheet.getRange(3, 1, lastRow - 2, maxCol).getValues();
+
+  var changed = 0;
+  for (var r = 0; r < values.length; r++) {
+    for (var c = 0; c < maxCol; c++) {
+      var colInGroup = (c % 4);
+      if (colInGroup === 1 || colInGroup === 2 || colInGroup === 3) {
+        var cell = values[r][c];
+        if (cell === "" || cell === null || typeof cell === 'undefined') continue;
+
+        var newText;
+        if (colInGroup === 1 || colInGroup === 2) {
+          newText = formatCellTimeToString(cell, true);
+        } else {
+          newText = formatCellDurationToString(cell);
+        }
+
+        if (newText !== null && newText !== stringifyCell(cell)) {
+          sheet.getRange(r + 3, c + 1).setValue("'" + newText);
+          changed++;
+        }
+      }
+    }
+  }
+
+  SpreadsheetApp.flush();
+  Logger.log("Normalization complete. Cells changed: " + changed);
+}
+
+/* ---------- Helpers: parsing and formatting ---------- */
+
+function formatCellTimeToString(cell, timeOnly) {
+  if (cell === null || typeof cell === 'undefined' || cell === "") return "";
+
+  if (cell instanceof Date && !isNaN(cell.getTime())) {
+    return Utilities.formatDate(cell, Session.getScriptTimeZone() || "GMT", "HH:mm:ss");
+  }
+
+  if (typeof cell === 'number') {
+    return timeFromSerial(cell);
+  }
+
+  var s = String(cell).trim();
+  var timeMatch = s.match(/(\d{1,2}:\d{2}:\d{2})/);
+  if (timeMatch) return timeMatch[1];
+  var shortMatch = s.match(/^\d{1,2}:\d{2}$/);
+  if (shortMatch) return s + ":00";
+  return s;
+}
+
+function formatCellDurationToString(cell) {
+  if (cell === null || typeof cell === 'undefined' || cell === "") return "";
+
+  if (cell instanceof Date && !isNaN(cell.getTime())) {
+    var timeStr = Utilities.formatDate(cell, Session.getScriptTimeZone() || "GMT", "HH:mm:ss");
+    return durationFromHHMMSS(timeStr);
+  }
+  if (typeof cell === 'number') {
+    var hhmmss = timeFromSerial(cell);
+    return durationFromHHMMSS(hhmmss);
+  }
+
+  var s = String(cell).trim();
+  var m = s.match(/(\d{1,2}:\d{2}:\d{2})/);
+  if (m) return durationFromHHMMSS(m[1]);
+  var m2 = s.match(/(\d{1,2}:\d{2})$/);
+  if (m2) {
+    var parts = m2[1].split(':');
+    var mm = parseInt(parts[0], 10);
+    var ss = parseInt(parts[1], 10);
+    return mm + ":" + ('0' + ss).slice(-2);
+  }
+  return s;
+}
+
+function timeFromSerial(serial) {
+  var totalSeconds = Math.round(serial * 24 * 3600);
+  totalSeconds = ((totalSeconds % (24*3600)) + (24*3600)) % (24*3600);
+  var h = Math.floor(totalSeconds / 3600);
+  var m = Math.floor((totalSeconds % 3600) / 60);
+  var s = totalSeconds % 60;
+  return ('0' + h).slice(-2) + ":" + ('0' + m).slice(-2) + ":" + ('0' + s).slice(-2);
+}
+
+function durationFromHHMMSS(hhmmss) {
+  var parts = hhmmss.split(':').map(function(x){return parseInt(x,10) || 0;});
+  if (parts.length === 3) {
+    var totalMin = parts[0]*60 + parts[1];
+    var sec = parts[2];
+    return totalMin + ":" + ('0' + sec).slice(-2);
+  }
+  if (parts.length === 2) {
+    return parts[0] + ":" + ('0' + parts[1]).slice(-2);
+  }
+  return hhmmss;
+}
+
+/* ---------- Date parsing helpers ---------- */
+
+function parseSheetDate(cell) {
+  if (cell instanceof Date && !isNaN(cell.getTime())) {
+    return new Date(cell.getFullYear(), cell.getMonth(), cell.getDate());
+  }
+  var s = stringifyCell(cell).trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    var d = new Date(s);
+    if (!isNaN(d.getTime())) return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  var parts;
+  if (s.indexOf('/') !== -1) parts = s.split('/');
+  else if (s.indexOf('-') !== -1) parts = s.split('-');
+  if (parts && parts.length >= 3) {
+    if (parts[0].length === 4) {
+      var y = parseInt(parts[0],10); var m = parseInt(parts[1],10)-1; var d2 = parseInt(parts[2],10);
+      var dt = new Date(y,m,d2); if (!isNaN(dt.getTime())) return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    } else {
+      var d3 = parseInt(parts[0],10); var m3 = parseInt(parts[1],10)-1; var y3 = parseInt(parts[2],10);
+      var dt2 = new Date(y3,m3,d3); if (!isNaN(dt2.getTime())) return new Date(dt2.getFullYear(), dt2.getMonth(), dt2.getDate());
+    }
+  }
+  var tryD = new Date(s);
+  if (!isNaN(tryD.getTime())) return new Date(tryD.getFullYear(), tryD.getMonth(), tryD.getDate());
+  return null;
+}
+
+function stringifyCell(cell) {
+  if (cell === null || typeof cell === 'undefined') return "";
+  if (cell instanceof Date) {
+    return Utilities.formatDate(cell, Session.getScriptTimeZone() || "GMT", "dd/MM/yyyy");
+  }
+  return String(cell);
+}
+
+function formatDateDDMMYYYY(dt) {
+  var dd = ('0' + dt.getDate()).slice(-2);
+  var mm = ('0' + (dt.getMonth() + 1)).slice(-2);
+  var yyyy = dt.getFullYear();
+  return dd + '/' + mm + '/' + yyyy;
+}
+
+function parseDateToDateObject(s) {
+  if (!s) return null;
+  s = String(s).trim();
+  var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    var d = parseInt(m[1],10), mo = parseInt(m[2],10)-1, y = parseInt(m[3],10);
+    var dt = new Date(y, mo, d);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+  var m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m2) {
+    var dt2 = new Date(s);
+    if (!isNaN(dt2.getTime())) return new Date(dt2.getFullYear(), dt2.getMonth(), dt2.getDate());
+  }
+  var tryD = new Date(s);
+  if (!isNaN(tryD.getTime())) return new Date(tryD.getFullYear(), tryD.getMonth(), tryD.getDate());
+  return null;
+}
+
+function parseDateForSort(dateStr, timeStr) {
+  var parts = dateStr.split('/');
+  var d = new Date(parts[2], parts[1]-1, parts[0]);
+  var timeParts = (timeStr || "").split(':');
+  var hours = parseInt(timeParts[0]||"0",10);
+  var mins = parseInt(timeParts[1]||"0",10);
+  var secs = parseInt(timeParts[2]||"0",10);
+  d.setHours(hours, mins, secs, 0);
+  return d.getTime();
+}
+
+/* ---------- Utility ---------- */
+
+function tryNormalizeDateString(s) {
+  if (!s) return "";
+  s = String(s).trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[3] + "/" + m[2] + "/" + m[1];
+  var dt = new Date(s);
+  if (!isNaN(dt.getTime())) return formatDateDDMMYYYY(dt);
+  return s;
+}
+
+function jsonError(msg) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'error',
+    message: String(msg)
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+/* ---------- Manual Test Functions ---------- */
+
+// Run this to test the email manually
+function testWeeklyEmail() {
+  sendWeeklyReport();
+}
