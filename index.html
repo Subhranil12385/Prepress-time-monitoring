@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -691,6 +690,11 @@
       border-radius: 8px;
       overflow: hidden;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s ease;
+    }
+
+    .mini-table-container:hover {
+      transform: translateY(-5px);
     }
 
     .mini-table-header {
@@ -730,6 +734,21 @@
     .mini-table .duration {
       font-weight: 600;
       font-size: 0.9em;
+    }
+
+    .more-entries {
+      text-align: center;
+      padding: 10px;
+      color: #667eea;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      background: rgba(102, 126, 234, 0.05);
+    }
+
+    .more-entries:hover {
+      background: rgba(102, 126, 234, 0.1);
+      color: #5a67d8;
     }
 
     .all-press-stats {
@@ -875,12 +894,23 @@
 
     <div class="section">
       <div class="section-header">
-        <h2 id="pressTitle">Pre Press - 1</h2>
+        <h2 id="pressTitle">All Pre Presses</h2>
         <button class="btn btn-export" onclick="exportToExcel()">Export To Excel</button>
       </div>
     </div>
 
-    <div class="table-container" id="singlePressContainer">
+    <!-- All Presses Section (Default View) -->
+    <div class="table-container" id="allPressesContainer">
+      <div class="all-press-stats" id="allPressStats">
+        <!-- Stats for all presses will be populated here -->
+      </div>
+      <div class="all-presses-container" id="allPressesTables">
+        <!-- Mini tables for all presses will be populated here -->
+      </div>
+    </div>
+
+    <!-- Single Press Section (Hidden by Default) -->
+    <div class="table-container" id="singlePressContainer" style="display: none">
       <div id="loadingContainer" class="loading">
         <div class="spinner"></div>
         <p>Loading data...</p>
@@ -901,24 +931,13 @@
         <p>No data available for the selected date range.</p>
       </div>
     </div>
-
-    <!-- All Presses Section -->
-    <div class="table-container" id="allPressesContainer" style="display: none">
-      <div class="all-press-stats" id="allPressStats">
-        <!-- Stats for all presses will be populated here -->
-      </div>
-      <div class="all-presses-container" id="allPressesTables">
-        <!-- Mini tables for all presses will be populated here -->
-      </div>
-    </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
   <script>
-    const SCRIPT_URL =
-      "https://script.google.com/macros/s/AKfycbyr8sSqhIin24puQuzh0yN4I1tJ5TXecoJPWBZPgiZ2toWy6Mk1HqtZxAO12cmAECqg/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyr8sSqhIin24puQuzh0yN4I1tJ5TXecoJPWBZPgiZ2toWy6Mk1HqtZxAO12cmAECqg/exec";
 
-    let currentPress = 1;
+    let currentPress = "all";
     let allData = {};
     let pressStatusData = {};
     let fromDatePicker, toDatePicker;
@@ -926,90 +945,6 @@
     let fireflies = [];
     let orbs = [];
     let meteors = [];
-
-    // Sample data for demonstration
-    const sampleData = {
-      1: [
-        {
-          date: "30/10/2025",
-          startTime: "22:53:00",
-          endTime: "",
-          duration: "3:00",
-          idleTime: "00:03:27"
-        },
-        {
-          date: "30/10/2025",
-          startTime: "22:19:34",
-          endTime: "22:49:33",
-          duration: "29:59",
-          idleTime: "00:02:37"
-        }
-      ],
-      2: [
-        {
-          date: "30/10/2025",
-          startTime: "21:46:27",
-          endTime: "22:16:57",
-          duration: "29:58",
-          idleTime: "00:03:03"
-        },
-        {
-          date: "30/10/2025",
-          startTime: "21:13:25",
-          endTime: "21:43:24",
-          duration: "29:59",
-          idleTime: "00:04:22"
-        }
-      ],
-      3: [
-        {
-          date: "30/10/2025",
-          startTime: "20:39:04",
-          endTime: "21:09:03",
-          duration: "29:59",
-          idleTime: "00:03:30"
-        },
-        {
-          date: "30/10/2025",
-          startTime: "20:05:28",
-          endTime: "20:35:34",
-          duration: "29:59",
-          idleTime: "00:02:40"
-        }
-      ],
-      4: [
-        {
-          date: "30/10/2025",
-          startTime: "19:32:49",
-          endTime: "20:02:48",
-          duration: "29:59",
-          idleTime: "00:02:43"
-        },
-        {
-          date: "30/10/2025",
-          startTime: "19:00:07",
-          endTime: "19:30:06",
-          duration: "29:59",
-          idleTime: "00:02:49"
-        }
-      ],
-      5: [
-        {
-          date: "30/10/2025",
-          startTime: "18:27:19",
-          endTime: "18:57:18",
-          duration: "29:59",
-          idleTime: "00:05:29"
-        },
-        {
-          date: "30/10/2025",
-          startTime: "17:51:52",
-          endTime: "18:21:50",
-          duration: "29:58",
-          idleTime: "00:02:03"
-        }
-      ]
-    };
 
     document.addEventListener("DOMContentLoaded", () => {
       updateDateTime();
@@ -1025,7 +960,6 @@
         allowInput: true,
         clickOpens: true,
         parseDate: (datestr, format) => {
-          // Handle DD/MM/YYYY format
           const parts = datestr.split('/');
           if (parts.length === 3) {
             return new Date(parts[2], parts[1] - 1, parts[0]);
@@ -1040,7 +974,6 @@
         allowInput: true,
         clickOpens: true,
         parseDate: (datestr, format) => {
-          // Handle DD/MM/YYYY format
           const parts = datestr.split('/');
           if (parts.length === 3) {
             return new Date(parts[2], parts[1] - 1, parts[0]);
@@ -1065,7 +998,7 @@
       document.getElementById("fromDate").value = todayStr;
       document.getElementById("toDate").value = todayStr;
 
-      // Load initial data
+      // Load initial data for all presses
       loadData();
 
       // Initialize theme toggle
@@ -1099,11 +1032,17 @@
       return `${day}/${month}/${year}`;
     }
 
+    function formatDateToYYYYMMDD(dateStr) {
+      const parts = dateStr.split('/');
+      if (parts.length !== 3) return '';
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+
     function initializePressButtons() {
       const pressButtonsContainer = document.getElementById("pressButtons");
       pressButtonsContainer.innerHTML = "";
 
-      // Add "All" button
+      // Add "All" button (active by default)
       const allButton = document.createElement("button");
       allButton.className = "press-btn active";
       allButton.innerHTML = `
@@ -1118,7 +1057,7 @@
         const button = document.createElement("button");
         button.className = "press-btn";
         button.innerHTML = `
-          <span class="status-indicator status-working"></span>
+          <span class="status-indicator status-idle"></span>
           Press ${i}
         `;
         button.onclick = () => selectPress(i);
@@ -1165,28 +1104,68 @@
         return;
       }
 
+      // Show loading state
       document.getElementById("loadingContainer").style.display = "block";
       document.getElementById("dataTable").style.display = "none";
       document.getElementById("noDataContainer").style.display = "none";
 
       try {
-        // For demo purposes, we'll use sample data
-        // In a real implementation, you would fetch from the API
-        allData = sampleData;
+        // Convert dates to YYYY-MM-DD format for API
+        const fromDateFormatted = formatDateToYYYYMMDD(fromDate);
+        const toDateFormatted = formatDateToYYYYMMDD(toDate);
+
+        // Load data for all presses
+        allData = {};
+        const pressPromises = [];
+
+        for (let press = 1; press <= 5; press++) {
+          pressPromises.push(
+            fetchDataForPress(press, fromDateFormatted, toDateFormatted)
+          );
+        }
+
+        // Wait for all data to load
+        const results = await Promise.all(pressPromises);
         
-        // Calculate press status
+        // Process results
+        results.forEach((result, index) => {
+          const pressNum = index + 1;
+          allData[pressNum] = result.records || [];
+        });
+
+        // Update press status indicators
         updatePressStatus();
-        
+
         // Display data based on current selection
         if (currentPress === "all") {
           displayAllPresses();
         } else {
           displaySinglePress(currentPress);
         }
+
+        // Hide loading state
+        document.getElementById("loadingContainer").style.display = "none";
       } catch (error) {
         console.error("Error loading data:", error);
         document.getElementById("loadingContainer").style.display = "none";
         document.getElementById("noDataContainer").style.display = "block";
+      }
+    }
+
+    async function fetchDataForPress(press, fromDate, toDate) {
+      try {
+        const url = `${SCRIPT_URL}?action=getData&press=${press}&fromDate=${fromDate}&toDate=${toDate}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error(`Error fetching data for press ${press}:`, error);
+        return { records: [] };
       }
     }
 
@@ -1202,11 +1181,11 @@
         return;
       }
 
-      data.forEach((row) => {
+      data.forEach((row, index) => {
         const tr = document.createElement("tr");
         
         // Determine row class based on duration
-        if (row.endTime === "") {
+        if (!row.endTime || row.endTime.trim() === '') {
           tr.classList.add("in-progress");
         } else {
           const duration = parseDuration(row.duration);
@@ -1219,12 +1198,22 @@
           }
         }
 
+        // Calculate idle time
+        let idleTimeStr = '00:00:00';
+        if (index < data.length - 1) {
+          const previousRec = data[index + 1];
+          if (previousRec.endTime && previousRec.endTime.trim() !== '' && row.startTime) {
+            const idle = calculateIdleTime(row.startTime, row.date, previousRec.endTime, previousRec.date);
+            if (idle) idleTimeStr = idle;
+          }
+        }
+
         tr.innerHTML = `
           <td>${row.date}</td>
           <td>${row.startTime}</td>
           <td>${row.endTime || "In Progress"}</td>
-          <td class="duration ${getDurationClass(row.duration)}">${row.duration}</td>
-          <td class="idle-time">${row.idleTime}</td>
+          <td class="duration ${getDurationClass(row.duration)}">${row.duration || "Pressing"}</td>
+          <td class="idle-time">${idleTimeStr}</td>
         `;
         tableBody.appendChild(tr);
       });
@@ -1268,7 +1257,7 @@
             pressBelowThirty++;
           }
           
-          if (row.endTime === "") {
+          if (!row.endTime || row.endTime.trim() === '') {
             pressWorking = true;
           }
         });
@@ -1317,7 +1306,7 @@
             <td>${row.date}</td>
             <td>${row.startTime}</td>
             <td>${row.endTime || "In Progress"}</td>
-            <td class="duration ${getDurationClass(row.duration)}">${row.duration}</td>
+            <td class="duration ${getDurationClass(row.duration)}">${row.duration || "Pressing"}</td>
           `;
           tbody.appendChild(tr);
         });
@@ -1325,9 +1314,10 @@
         // Add "More..." row if there are more than 3 entries
         if (data.length > 3) {
           const tr = document.createElement("tr");
+          const remainingCount = data.length - 3;
           tr.innerHTML = `
-            <td colspan="4" style="text-align: center; font-style: italic;">
-              +${data.length - 3} more entries
+            <td colspan="4" class="more-entries" onclick="expandPress(${press})">
+              +${remainingCount} more entries
             </td>
           `;
           tbody.appendChild(tr);
@@ -1377,6 +1367,16 @@
       `;
     }
 
+    function expandPress(pressNumber) {
+      // Switch to the selected press
+      selectPress(pressNumber);
+      
+      // Scroll to the table section for better UX
+      document.getElementById('singlePressContainer').scrollIntoView({ 
+        behavior: 'smooth' 
+      });
+    }
+
     function updateStatsForPress(press) {
       const data = allData[press] || [];
       const totalPresses = data.length;
@@ -1404,7 +1404,7 @@
       // Update press status indicators based on data
       for (let press = 1; press <= 5; press++) {
         const data = allData[press] || [];
-        const isWorking = data.some(row => row.endTime === "");
+        const isWorking = data.some(row => !row.endTime || row.endTime.trim() === '');
         
         // Update status indicator in press buttons
         const pressButtons = document.querySelectorAll(".press-btn");
@@ -1437,7 +1437,9 @@
     function getDurationClass(durationStr) {
       const duration = parseDuration(durationStr);
       
-      if (duration >= 30 * 60) {
+      if (!durationStr || durationStr === "Pressing") {
+        return "in-progress";
+      } else if (duration >= 30 * 60) {
         return "success";
       } else if (duration >= 25 * 60) {
         return "warning";
@@ -1446,8 +1448,51 @@
       }
     }
 
+    function calculateIdleTime(currentStartTime, currentDate, previousEndTime, previousDate) {
+      if (!previousEndTime || !currentStartTime) return null;
+      
+      // Parse dates
+      const currDateParts = currentDate.split('/');
+      const prevDateParts = previousDate.split('/');
+      
+      const currDate = new Date(currDateParts[2], currDateParts[1] - 1, currDateParts[0]);
+      const prevDate = new Date(prevDateParts[2], prevDateParts[1] - 1, prevDateParts[0]);
+      
+      // Parse times (assuming hh:mm:ss format, but handle hh:mm as well)
+      const currTimeParts = currentStartTime.split(':').map(Number);
+      const prevTimeParts = previousEndTime.split(':').map(Number);
+      
+      const currHours = currTimeParts[0] || 0;
+      const currMinutes = currTimeParts[1] || 0;
+      const currSeconds = currTimeParts[2] || 0;
+      
+      const prevHours = prevTimeParts[0] || 0;
+      const prevMinutes = prevTimeParts[1] || 0;
+      const prevSeconds = prevTimeParts[2] || 0;
+      
+      currDate.setHours(currHours, currMinutes, currSeconds, 0);
+      prevDate.setHours(prevHours, prevMinutes, prevSeconds, 0);
+      
+      const diffMs = currDate - prevDate;
+      const diffSeconds = Math.floor(diffMs / 1000);
+      
+      if (diffSeconds < 0) return null;
+      
+      const hours = Math.floor(diffSeconds / 3600);
+      const mins = Math.floor((diffSeconds % 3600) / 60);
+      const secs = diffSeconds % 60;
+      
+      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
     function exportToExcel() {
-      alert("Export to Excel functionality would be implemented here.");
+      if (currentPress === "all") {
+        alert("Exporting all presses data to Excel...");
+        // Implementation for exporting all presses data
+      } else {
+        alert(`Exporting Press ${currentPress} data to Excel...`);
+        // Implementation for exporting single press data
+      }
     }
 
     function toggleTheme() {
@@ -1625,4 +1670,3 @@
   </script>
 </body>
 </html>
-
