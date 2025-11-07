@@ -1,3 +1,18 @@
+Conversation opened. 1 unread message.
+
+Skip to content
+Using Gmail with screen readers
+1 of 1
+(no subject)
+Inbox
+
+Subhranil Dey
+Attachments
+09:48 (0 minutes ago)
+to me
+
+ One attachment
+  •  Scanned by Gmail
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -677,6 +692,88 @@
       color: #667eea;
     }
 
+    /* New styles for All Presses section */
+    .all-presses-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .mini-table-container {
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .mini-table-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 15px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mini-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85em;
+    }
+
+    .mini-table th {
+      background: #f8f9fa;
+      padding: 10px 8px;
+      text-align: left;
+      font-weight: 600;
+      color: #495057;
+      border-bottom: 1px solid #dee2e6;
+    }
+
+    .mini-table td {
+      padding: 8px;
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .mini-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .mini-table .duration {
+      font-weight: 600;
+      font-size: 0.9em;
+    }
+
+    .all-press-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      padding: 20px;
+    }
+
+    .all-stat-card {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .all-stat-card h4 {
+      color: #6c757d;
+      font-size: 0.8em;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+    }
+
+    .all-stat-card .value {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #667eea;
+    }
+
     @media (max-width: 768px) {
       .header h1 {
         font-size: 1.8em;
@@ -698,6 +795,10 @@
 
       table {
         font-size: 0.9em;
+      }
+
+      .all-presses-container {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -793,7 +894,7 @@
       </div>
     </div>
 
-    <div class="table-container">
+    <div class="table-container" id="singlePressContainer">
       <div id="loadingContainer" class="loading">
         <div class="spinner"></div>
         <p>Loading data...</p>
@@ -814,6 +915,16 @@
         <p>No data available for the selected date range.</p>
       </div>
     </div>
+
+    <!-- All Presses Section -->
+    <div class="table-container" id="allPressesContainer" style="display: none">
+      <div class="all-press-stats" id="allPressStats">
+        <!-- Stats for all presses will be populated here -->
+      </div>
+      <div class="all-presses-container" id="allPressesTables">
+        <!-- Mini tables for all presses will be populated here -->
+      </div>
+    </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
@@ -822,7 +933,7 @@
       "https://script.google.com/macros/s/AKfycbyr8sSqhIin24puQuzh0yN4I1tJ5TXecoJPWBZPgiZ2toWy6Mk1HqtZxAO12cmAECqg/exec";
 
     let currentPress = 1;
-    let allData = [];
+    let allData = {};
     let pressStatusData = {};
     let fromDatePicker, toDatePicker;
     let darkMode = false;
@@ -831,190 +942,88 @@
     let meteors = [];
 
     // Sample data for demonstration
-    const sampleData = [
-      {
-        date: "30/10/2025",
-        startTime: "22:53:00",
-        endTime: "",
-        duration: "3:00",
-        idleTime: "00:03:27"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "22:19:34",
-        endTime: "22:49:33",
-        duration: "29:59",
-        idleTime: "00:02:37"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "21:46:27",
-        endTime: "22:16:57",
-        duration: "29:58",
-        idleTime: "00:03:03"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "21:13:25",
-        endTime: "21:43:24",
-        duration: "29:59",
-        idleTime: "00:04:22"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "20:39:04",
-        endTime: "21:09:03",
-        duration: "29:59",
-        idleTime: "00:03:30"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "20:05:28",
-        endTime: "20:35:34",
-        duration: "29:59",
-        idleTime: "00:02:40"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "19:32:49",
-        endTime: "20:02:48",
-        duration: "29:59",
-        idleTime: "00:02:43"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "19:00:07",
-        endTime: "19:30:06",
-        duration: "29:59",
-        idleTime: "00:02:49"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "18:27:19",
-        endTime: "18:57:18",
-        duration: "29:59",
-        idleTime: "00:05:29"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "17:51:52",
-        endTime: "18:21:50",
-        duration: "29:58",
-        idleTime: "00:02:03"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "17:19:51",
-        endTime: "17:49:49",
-        duration: "29:58",
-        idleTime: "00:01:40"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "16:48:12",
-        endTime: "17:18:11",
-        duration: "29:59",
-        idleTime: "00:01:56"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "16:16:17",
-        endTime: "16:46:16",
-        duration: "29:59",
-        idleTime: "00:03:16"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "15:43:02",
-        endTime: "16:13:01",
-        duration: "29:59",
-        idleTime: "00:04:42"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "15:08:21",
-        endTime: "15:38:20",
-        duration: "29:59",
-        idleTime: "00:04:19"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "14:34:03",
-        endTime: "15:04:02",
-        duration: "29:59",
-        idleTime: "00:05:17"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "13:58:48",
-        endTime: "14:28:46",
-        duration: "29:58",
-        idleTime: "00:03:42"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "13:25:07",
-        endTime: "13:55:06",
-        duration: "29:59",
-        idleTime: "00:03:50"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "12:51:18",
-        endTime: "13:21:17",
-        duration: "29:59",
-        idleTime: "00:02:43"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "12:18:36",
-        endTime: "12:48:35",
-        duration: "29:59",
-        idleTime: "00:06:02"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "11:42:36",
-        endTime: "12:12:34",
-        duration: "29:58",
-        idleTime: "00:04:25"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "11:08:13",
-        endTime: "11:38:11",
-        duration: "29:58",
-        idleTime: "00:03:24"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "10:34:50",
-        endTime: "11:04:49",
-        duration: "29:59",
-        idleTime: "00:04:12"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "10:00:39",
-        endTime: "10:30:38",
-        duration: "29:59",
-        idleTime: "00:02:55"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "09:27:45",
-        endTime: "09:57:44",
-        duration: "29:59",
-        idleTime: "00:03:12"
-      },
-      {
-        date: "30/10/2025",
-        startTime: "08:54:35",
-        endTime: "09:24:33",
-        duration: "29:58",
-        idleTime: "00:03:19"
-      }
-    ];
+    const sampleData = {
+      1: [
+        {
+          date: "30/10/2025",
+          startTime: "22:53:00",
+          endTime: "",
+          duration: "3:00",
+          idleTime: "00:03:27"
+        },
+        {
+          date: "30/10/2025",
+          startTime: "22:19:34",
+          endTime: "22:49:33",
+          duration: "29:59",
+          idleTime: "00:02:37"
+        }
+      ],
+      2: [
+        {
+          date: "30/10/2025",
+          startTime: "21:46:27",
+          endTime: "22:16:57",
+          duration: "29:58",
+          idleTime: "00:03:03"
+        },
+        {
+          date: "30/10/2025",
+          startTime: "21:13:25",
+          endTime: "21:43:24",
+          duration: "29:59",
+          idleTime: "00:04:22"
+        }
+      ],
+      3: [
+        {
+          date: "30/10/2025",
+          startTime: "20:39:04",
+          endTime: "21:09:03",
+          duration: "29:59",
+          idleTime: "00:03:30"
+        },
+        {
+          date: "30/10/2025",
+          startTime: "20:05:28",
+          endTime: "20:35:34",
+          duration: "29:59",
+          idleTime: "00:02:40"
+        }
+      ],
+      4: [
+        {
+          date: "30/10/2025",
+          startTime: "19:32:49",
+          endTime: "20:02:48",
+          duration: "29:59",
+          idleTime: "00:02:43"
+        },
+        {
+          date: "30/10/2025",
+          startTime: "19:00:07",
+          endTime: "19:30:06",
+          duration: "29:59",
+          idleTime: "00:02:49"
+        }
+      ],
+      5: [
+        {
+          date: "30/10/2025",
+          startTime: "18:27:19",
+          endTime: "18:57:18",
+          duration: "29:59",
+          idleTime: "00:05:29"
+        },
+        {
+          date: "30/10/2025",
+          startTime: "17:51:52",
+          endTime: "18:21:50",
+          duration: "29:58",
+          idleTime: "00:02:03"
+        }
+      ]
+    };
 
     document.addEventListener("DOMContentLoaded", () => {
       updateDateTime();
@@ -1035,10 +1044,10 @@
           if (parts.length === 3) {
             return new Date(parts[2], parts[1] - 1, parts[0]);
           }
-          return new Date(datestr);
+          return null;
         }
       });
-      
+
       toDatePicker = flatpickr("#toDate", {
         dateFormat: "d/m/Y",
         defaultDate: today,
@@ -1050,566 +1059,585 @@
           if (parts.length === 3) {
             return new Date(parts[2], parts[1] - 1, parts[0]);
           }
-          return new Date(datestr);
+          return null;
         }
       });
-      
-      // Make calendar icons clickable
+
+      // Add click events to calendar icons
       document.getElementById("fromDateIcon").addEventListener("click", () => {
         fromDatePicker.open();
       });
-      
+
       document.getElementById("toDateIcon").addEventListener("click", () => {
         toDatePicker.open();
       });
 
-      initPressButtons();
-      
-      // Load initial data with sample data
-      loadData();
-      
-      // Load press status
-      loadAllPressesStatus();
-      setInterval(loadAllPressesStatus, 30000);
+      // Initialize press buttons
+      initializePressButtons();
 
-      // Theme toggle
-      document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-      
-      // Mouse movement for lantern cursor
-      document.addEventListener('mousemove', moveLanternCursor);
-      
-      // Click effect
-      document.addEventListener('click', createRepelEffect);
+      // Set default dates
+      document.getElementById("fromDate").value = todayStr;
+      document.getElementById("toDate").value = todayStr;
+
+      // Load initial data
+      loadData();
+
+      // Initialize theme toggle
+      document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+
+      // Initialize lantern cursor
+      initializeLanternCursor();
     });
+
+    function updateDateTime() {
+      const now = new Date();
+      const options = {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      };
+      document.getElementById("currentDateTime").textContent = now.toLocaleDateString(
+        "en-US",
+        options
+      );
+    }
+
+    function formatDateToDDMMYYYY(date) {
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+
+    function initializePressButtons() {
+      const pressButtonsContainer = document.getElementById("pressButtons");
+      pressButtonsContainer.innerHTML = "";
+
+      // Add "All" button
+      const allButton = document.createElement("button");
+      allButton.className = "press-btn active";
+      allButton.innerHTML = `
+        <span class="status-indicator status-working"></span>
+        All Presses
+      `;
+      allButton.onclick = () => selectPress("all");
+      pressButtonsContainer.appendChild(allButton);
+
+      // Add individual press buttons
+      for (let i = 1; i <= 5; i++) {
+        const button = document.createElement("button");
+        button.className = "press-btn";
+        button.innerHTML = `
+          <span class="status-indicator status-working"></span>
+          Press ${i}
+        `;
+        button.onclick = () => selectPress(i);
+        pressButtonsContainer.appendChild(button);
+      }
+    }
+
+    function selectPress(press) {
+      currentPress = press;
+      
+      // Update button states
+      document.querySelectorAll(".press-btn").forEach((btn, index) => {
+        if (index === 0 && press === "all") {
+          btn.classList.add("active");
+        } else if (index === press) {
+          btn.classList.add("active");
+        } else {
+          btn.classList.remove("active");
+        }
+      });
+
+      // Update press title
+      document.getElementById("pressTitle").textContent = 
+        press === "all" ? "All Pre Presses" : `Pre Press - ${press}`;
+
+      // Show/hide appropriate containers
+      if (press === "all") {
+        document.getElementById("singlePressContainer").style.display = "none";
+        document.getElementById("allPressesContainer").style.display = "block";
+        displayAllPresses();
+      } else {
+        document.getElementById("singlePressContainer").style.display = "block";
+        document.getElementById("allPressesContainer").style.display = "none";
+        displaySinglePress(press);
+      }
+    }
+
+    async function loadData() {
+      const fromDate = document.getElementById("fromDate").value;
+      const toDate = document.getElementById("toDate").value;
+
+      if (!fromDate || !toDate) {
+        alert("Please select both from and to dates.");
+        return;
+      }
+
+      document.getElementById("loadingContainer").style.display = "block";
+      document.getElementById("dataTable").style.display = "none";
+      document.getElementById("noDataContainer").style.display = "none";
+
+      try {
+        // For demo purposes, we'll use sample data
+        // In a real implementation, you would fetch from the API
+        allData = sampleData;
+        
+        // Calculate press status
+        updatePressStatus();
+        
+        // Display data based on current selection
+        if (currentPress === "all") {
+          displayAllPresses();
+        } else {
+          displaySinglePress(currentPress);
+        }
+      } catch (error) {
+        console.error("Error loading data:", error);
+        document.getElementById("loadingContainer").style.display = "none";
+        document.getElementById("noDataContainer").style.display = "block";
+      }
+    }
+
+    function displaySinglePress(press) {
+      const data = allData[press] || [];
+      const tableBody = document.getElementById("tableBody");
+      tableBody.innerHTML = "";
+
+      if (data.length === 0) {
+        document.getElementById("loadingContainer").style.display = "none";
+        document.getElementById("dataTable").style.display = "none";
+        document.getElementById("noDataContainer").style.display = "block";
+        return;
+      }
+
+      data.forEach((row) => {
+        const tr = document.createElement("tr");
+        
+        // Determine row class based on duration
+        if (row.endTime === "") {
+          tr.classList.add("in-progress");
+        } else {
+          const duration = parseDuration(row.duration);
+          if (duration >= 30 * 60) {
+            tr.classList.add("success");
+          } else if (duration >= 25 * 60) {
+            tr.classList.add("warning");
+          } else {
+            tr.classList.add("danger");
+          }
+        }
+
+        tr.innerHTML = `
+          <td>${row.date}</td>
+          <td>${row.startTime}</td>
+          <td>${row.endTime || "In Progress"}</td>
+          <td class="duration ${getDurationClass(row.duration)}">${row.duration}</td>
+          <td class="idle-time">${row.idleTime}</td>
+        `;
+        tableBody.appendChild(tr);
+      });
+
+      document.getElementById("loadingContainer").style.display = "none";
+      document.getElementById("dataTable").style.display = "table";
+      document.getElementById("noDataContainer").style.display = "none";
+
+      // Update stats for single press
+      updateStatsForPress(press);
+    }
+
+    function displayAllPresses() {
+      const allPressesTables = document.getElementById("allPressesTables");
+      const allPressStats = document.getElementById("allPressStats");
+      
+      allPressesTables.innerHTML = "";
+      allPressStats.innerHTML = "";
+
+      // Calculate overall stats
+      let totalPresses = 0;
+      let totalDuration = 0;
+      let belowThirtyCount = 0;
+      let workingPresses = 0;
+
+      // Create mini tables for each press
+      for (let press = 1; press <= 5; press++) {
+        const data = allData[press] || [];
+        totalPresses += data.length;
+        
+        // Calculate press-specific stats
+        let pressTotalDuration = 0;
+        let pressBelowThirty = 0;
+        let pressWorking = false;
+        
+        data.forEach(row => {
+          const duration = parseDuration(row.duration);
+          pressTotalDuration += duration;
+          
+          if (duration < 30 * 60) {
+            pressBelowThirty++;
+          }
+          
+          if (row.endTime === "") {
+            pressWorking = true;
+          }
+        });
+        
+        totalDuration += pressTotalDuration;
+        belowThirtyCount += pressBelowThirty;
+        if (pressWorking) workingPresses++;
+
+        // Create mini table container
+        const miniTableContainer = document.createElement("div");
+        miniTableContainer.className = "mini-table-container";
+        
+        // Create header
+        const header = document.createElement("div");
+        header.className = "mini-table-header";
+        header.innerHTML = `
+          <span class="status-indicator ${pressWorking ? 'status-working' : 'status-idle'}"></span>
+          Pre Press - ${press}
+        `;
+        miniTableContainer.appendChild(header);
+        
+        // Create mini table
+        const miniTable = document.createElement("table");
+        miniTable.className = "mini-table";
+        
+        // Create table header
+        const thead = document.createElement("thead");
+        thead.innerHTML = `
+          <tr>
+            <th>Date</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Duration</th>
+          </tr>
+        `;
+        miniTable.appendChild(thead);
+        
+        // Create table body
+        const tbody = document.createElement("tbody");
+        
+        // Add up to 3 rows (or all if less than 3)
+        const rowsToShow = data.slice(0, 3);
+        rowsToShow.forEach(row => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${row.date}</td>
+            <td>${row.startTime}</td>
+            <td>${row.endTime || "In Progress"}</td>
+            <td class="duration ${getDurationClass(row.duration)}">${row.duration}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+        
+        // Add "More..." row if there are more than 3 entries
+        if (data.length > 3) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td colspan="4" style="text-align: center; font-style: italic;">
+              +${data.length - 3} more entries
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
+        
+        // Add "No data" message if empty
+        if (data.length === 0) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td colspan="4" style="text-align: center; color: #6c757d;">
+              No data available
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
+        
+        miniTable.appendChild(tbody);
+        miniTableContainer.appendChild(miniTable);
+        allPressesTables.appendChild(miniTableContainer);
+      }
+
+      // Update overall stats
+      const avgDuration = totalPresses > 0 ? formatDuration(totalDuration / totalPresses) : "0:00";
+      
+      document.getElementById("totalPresses").textContent = totalPresses;
+      document.getElementById("avgDuration").textContent = avgDuration;
+      document.getElementById("belowThirty").textContent = belowThirtyCount;
+      
+      // Create stats for all presses
+      allPressStats.innerHTML = `
+        <div class="all-stat-card">
+          <h4>Total Entries</h4>
+          <div class="value">${totalPresses}</div>
+        </div>
+        <div class="all-stat-card">
+          <h4>Avg Duration</h4>
+          <div class="value">${avgDuration}</div>
+        </div>
+        <div class="all-stat-card">
+          <h4>Below 30 Min</h4>
+          <div class="value">${belowThirtyCount}</div>
+        </div>
+        <div class="all-stat-card">
+          <h4>Working Presses</h4>
+          <div class="value">${workingPresses}/5</div>
+        </div>
+      `;
+    }
+
+    function updateStatsForPress(press) {
+      const data = allData[press] || [];
+      const totalPresses = data.length;
+      
+      let totalDuration = 0;
+      let belowThirtyCount = 0;
+      
+      data.forEach(row => {
+        const duration = parseDuration(row.duration);
+        totalDuration += duration;
+        
+        if (duration < 30 * 60) {
+          belowThirtyCount++;
+        }
+      });
+      
+      const avgDuration = totalPresses > 0 ? formatDuration(totalDuration / totalPresses) : "0:00";
+      
+      document.getElementById("totalPresses").textContent = totalPresses;
+      document.getElementById("avgDuration").textContent = avgDuration;
+      document.getElementById("belowThirty").textContent = belowThirtyCount;
+    }
+
+    function updatePressStatus() {
+      // Update press status indicators based on data
+      for (let press = 1; press <= 5; press++) {
+        const data = allData[press] || [];
+        const isWorking = data.some(row => row.endTime === "");
+        
+        // Update status indicator in press buttons
+        const pressButtons = document.querySelectorAll(".press-btn");
+        if (pressButtons[press]) {
+          const indicator = pressButtons[press].querySelector(".status-indicator");
+          if (indicator) {
+            indicator.className = `status-indicator ${isWorking ? 'status-working' : 'status-idle'}`;
+          }
+        }
+      }
+    }
+
+    function parseDuration(durationStr) {
+      if (!durationStr) return 0;
+      
+      const parts = durationStr.split(':');
+      if (parts.length === 2) {
+        return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      }
+      
+      return 0;
+    }
+
+    function formatDuration(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = Math.floor(seconds % 60);
+      return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+    }
+
+    function getDurationClass(durationStr) {
+      const duration = parseDuration(durationStr);
+      
+      if (duration >= 30 * 60) {
+        return "success";
+      } else if (duration >= 25 * 60) {
+        return "warning";
+      } else {
+        return "danger";
+      }
+    }
+
+    function exportToExcel() {
+      alert("Export to Excel functionality would be implemented here.");
+    }
 
     function toggleTheme() {
       darkMode = !darkMode;
-      document.body.classList.toggle('dark-mode', darkMode);
+      document.body.classList.toggle("dark-mode", darkMode);
       
       if (darkMode) {
-        createFireflies(30); // Increased number of fireflies
-        createOrbs(5);
-        startMeteorShower();
+        createCelestialEffects();
       } else {
-        removeFireflies();
-        removeOrbs();
-        stopMeteorShower();
+        removeCelestialEffects();
       }
     }
 
-    function createFireflies(count) {
-      removeFireflies();
+    function createCelestialEffects() {
+      // Create fireflies
+      for (let i = 0; i < 15; i++) {
+        createFirefly();
+      }
       
-      for (let i = 0; i < count; i++) {
-        const firefly = document.createElement('div');
-        firefly.className = 'firefly';
-        document.body.appendChild(firefly);
-        fireflies.push(firefly);
-        
-        animateFirefly(firefly);
+      // Create orbs
+      for (let i = 0; i < 5; i++) {
+        createOrb();
       }
+      
+      // Create meteors
+      setInterval(createMeteor, 2000);
     }
 
-    function animateFirefly(firefly) {
+    function removeCelestialEffects() {
+      // Remove all celestial elements
+      document.querySelectorAll('.firefly, .orb, .meteor').forEach(el => {
+        el.remove();
+      });
+      
+      // Clear intervals
+      fireflies = [];
+      orbs = [];
+      meteors = [];
+    }
+
+    function createFirefly() {
+      const firefly = document.createElement('div');
+      firefly.className = 'firefly';
+      document.body.appendChild(firefly);
+      
       const startX = Math.random() * window.innerWidth;
       const startY = Math.random() * window.innerHeight;
-      const duration = 5 + Math.random() * 10;
-      const delay = Math.random() * 5;
       
       firefly.style.left = `${startX}px`;
       firefly.style.top = `${startY}px`;
-      firefly.style.opacity = '0';
       
-      // Fade in
-      setTimeout(() => {
-        firefly.style.transition = `opacity 2s ease`;
-        firefly.style.opacity = '0.7';
-        
-        // Move around randomly
-        const moveInterval = setInterval(() => {
-          if (!darkMode) {
-            clearInterval(moveInterval);
-            return;
-          }
-          
-          const newX = Math.random() * window.innerWidth;
-          const newY = Math.random() * window.innerHeight;
-          
-          firefly.style.transition = `left ${duration}s ease, top ${duration}s ease`;
-          firefly.style.left = `${newX}px`;
-          firefly.style.top = `${newY}px`;
-        }, duration * 1000);
-        
-        // Flicker
-        const flickerInterval = setInterval(() => {
-          if (!darkMode) {
-            clearInterval(flickerInterval);
-            return;
-          }
-          
-          firefly.style.opacity = Math.random() > 0.5 ? '0.7' : '0.3';
-        }, 500);
-      }, delay * 1000);
-    }
-
-    function removeFireflies() {
-      fireflies.forEach(firefly => {
-        if (firefly.parentNode) {
-          firefly.parentNode.removeChild(firefly);
-        }
+      // Animate firefly
+      const duration = 3000 + Math.random() * 4000;
+      const keyframes = [
+        { transform: `translate(0, 0)`, opacity: 0 },
+        { transform: `translate(${Math.random() * 100 - 50}px, ${Math.random() * 100 - 50}px)`, opacity: 0.8 },
+        { transform: `translate(${Math.random() * 100 - 50}px, ${Math.random() * 100 - 50}px)`, opacity: 0 }
+      ];
+      
+      const animation = firefly.animate(keyframes, {
+        duration: duration,
+        iterations: Infinity,
+        easing: 'ease-in-out'
       });
-      fireflies = [];
-    }
-
-    function createOrbs(count) {
-      removeOrbs();
       
-      for (let i = 0; i < count; i++) {
-        const orb = document.createElement('div');
-        orb.className = 'orb';
-        document.body.appendChild(orb);
-        orbs.push(orb);
-        
-        animateOrb(orb);
-      }
+      fireflies.push({
+        element: firefly,
+        animation: animation
+      });
     }
 
-    function animateOrb(orb) {
-      const startX = Math.random() * window.innerWidth;
-      const startY = Math.random() * window.innerHeight;
+    function createOrb() {
+      const orb = document.createElement('div');
+      orb.className = 'orb';
+      document.body.appendChild(orb);
+      
       const size = 40 + Math.random() * 80;
-      
       orb.style.width = `${size}px`;
       orb.style.height = `${size}px`;
+      
+      const startX = Math.random() * window.innerWidth;
+      const startY = Math.random() * window.innerHeight;
+      
       orb.style.left = `${startX}px`;
       orb.style.top = `${startY}px`;
       
-      // Float around
-      const floatInterval = setInterval(() => {
-        if (!darkMode) {
-          clearInterval(floatInterval);
-          return;
-        }
-        
-        const newX = Math.random() * window.innerWidth;
-        const newY = Math.random() * window.innerHeight;
-        const duration = 20 + Math.random() * 30;
-        
-        orb.style.transition = `left ${duration}s ease, top ${duration}s ease`;
-        orb.style.left = `${newX}px`;
-        orb.style.top = `${newY}px`;
-      }, 20000);
-    }
-
-    function removeOrbs() {
-      orbs.forEach(orb => {
-        if (orb.parentNode) {
-          orb.parentNode.removeChild(orb);
-        }
+      // Animate orb
+      const duration = 10000 + Math.random() * 15000;
+      const keyframes = [
+        { transform: `translate(0, 0)`, opacity: 0.1 },
+        { transform: `translate(${Math.random() * 200 - 100}px, ${Math.random() * 200 - 100}px)`, opacity: 0.4 },
+        { transform: `translate(${Math.random() * 200 - 100}px, ${Math.random() * 200 - 100}px)`, opacity: 0.1 }
+      ];
+      
+      const animation = orb.animate(keyframes, {
+        duration: duration,
+        iterations: Infinity,
+        easing: 'ease-in-out'
       });
-      orbs = [];
-    }
-
-    function startMeteorShower() {
-      // Create meteors periodically
-      const meteorInterval = setInterval(() => {
-        if (!darkMode) {
-          clearInterval(meteorInterval);
-          return;
-        }
-        
-        createMeteor();
-      }, 5000);
+      
+      orbs.push({
+        element: orb,
+        animation: animation
+      });
     }
 
     function createMeteor() {
       const meteor = document.createElement('div');
       meteor.className = 'meteor';
       document.body.appendChild(meteor);
-      meteors.push(meteor);
       
       const startX = Math.random() * window.innerWidth;
       const startY = -50;
-      const distance = 500 + Math.random() * 300;
-      const duration = 1 + Math.random();
       
       meteor.style.left = `${startX}px`;
       meteor.style.top = `${startY}px`;
-      meteor.style.opacity = '1';
       
       // Animate meteor
-      setTimeout(() => {
-        meteor.style.transition = `left ${duration}s linear, top ${duration}s linear, opacity ${duration}s ease`;
-        meteor.style.left = `${startX + distance}px`;
-        meteor.style.top = `${startY + distance}px`;
-        meteor.style.opacity = '0';
-        
-        // Remove after animation
-        setTimeout(() => {
-          if (meteor.parentNode) {
-            meteor.parentNode.removeChild(meteor);
-          }
-          meteors = meteors.filter(m => m !== meteor);
-        }, duration * 1000);
-      }, 100);
-    }
-
-    function stopMeteorShower() {
-      meteors.forEach(meteor => {
-        if (meteor.parentNode) {
-          meteor.parentNode.removeChild(meteor);
-        }
+      const duration = 1000 + Math.random() * 2000;
+      const distance = 300 + Math.random() * 400;
+      
+      const keyframes = [
+        { transform: 'translate(0, 0) rotate(-45deg)', opacity: 0 },
+        { transform: `translate(${distance}px, ${distance}px) rotate(-45deg)`, opacity: 1 },
+        { transform: `translate(${distance * 1.2}px, ${distance * 1.2}px) rotate(-45deg)`, opacity: 0 }
+      ];
+      
+      const animation = meteor.animate(keyframes, {
+        duration: duration,
+        iterations: 1,
+        easing: 'ease-in'
       });
-      meteors = [];
+      
+      animation.onfinish = () => {
+        meteor.remove();
+      };
+      
+      meteors.push(meteor);
     }
 
-    function moveLanternCursor(e) {
-      const cursor = document.getElementById('lanternCursor');
-      cursor.style.left = `${e.clientX - 20}px`;
-      cursor.style.top = `${e.clientY - 30}px`;
+    function initializeLanternCursor() {
+      const lanternCursor = document.getElementById('lanternCursor');
+      
+      document.addEventListener('mousemove', (e) => {
+        lanternCursor.style.left = `${e.clientX - 20}px`;
+        lanternCursor.style.top = `${e.clientY - 30}px`;
+        
+        // Create repel effect
+        createRepelEffect(e.clientX, e.clientY);
+      });
     }
 
-    function createRepelEffect(e) {
+    function createRepelEffect(x, y) {
       if (!darkMode) return;
       
-      const effect = document.createElement('div');
-      effect.className = 'repel-effect';
-      document.body.appendChild(effect);
-      
-      effect.style.left = `${e.clientX - 50}px`;
-      effect.style.top = `${e.clientY - 50}px`;
-      effect.style.opacity = '1';
+      const repel = document.createElement('div');
+      repel.className = 'repel-effect';
+      repel.style.left = `${x - 50}px`;
+      repel.style.top = `${y - 50}px`;
+      document.body.appendChild(repel);
       
       // Animate repel effect
-      setTimeout(() => {
-        effect.style.transition = 'transform 0.5s ease, opacity 0.5s ease';
-        effect.style.transform = 'scale(2)';
-        effect.style.opacity = '0';
-        
-        // Remove after animation
-        setTimeout(() => {
-          if (effect.parentNode) {
-            effect.parentNode.removeChild(effect);
-          }
-        }, 500);
-      }, 10);
-    }
-
-    function updateDateTime() {
-      const now = new Date();
-      document.getElementById("currentDateTime").textContent = now.toLocaleString(
-        "en-US",
-        {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }
-      );
-    }
-
-    function initPressButtons() {
-      const pressContainer = document.getElementById("pressButtons");
-      for (let i = 1; i <= 5; i++) {
-        const btn = document.createElement("button");
-        btn.className = `press-btn${i === 1 ? " active" : ""}`;
-        btn.onclick = () => selectPress(i);
-        
-        const indicator = document.createElement("span");
-        indicator.className = "status-indicator status-idle";
-        indicator.id = `status-indicator-${i}`;
-        
-        const text = document.createTextNode(`Press ${i}`);
-        
-        btn.appendChild(indicator);
-        btn.appendChild(text);
-        pressContainer.appendChild(btn);
-      }
-    }
-
-    function selectPress(pressNum) {
-      currentPress = pressNum;
-      document.querySelectorAll(".press-btn").forEach((btn, i) => {
-        btn.classList.toggle("active", i + 1 === pressNum);
+      const animation = repel.animate([
+        { transform: 'scale(0.5)', opacity: 0.6 },
+        { transform: 'scale(1.5)', opacity: 0 }
+      ], {
+        duration: 800,
+        easing: 'ease-out'
       });
-      document.getElementById("pressTitle").textContent = `Pre Press - ${pressNum}`;
-      loadData();
-    }
-
-    async function loadAllPressesStatus() {
-      const today = new Date();
-      const todayYYYYMMDD = today.toISOString().split("T")[0];
       
-      for (let i = 1; i <= 5; i++) {
-        try {
-          const url = `${SCRIPT_URL}?action=getData&press=${i}&fromDate=${todayYYYYMMDD}&toDate=${todayYYYYMMDD}`;
-          const response = await fetch(url);
-          const data = await response.json();
-          
-          const records = data.records || [];
-          pressStatusData[i] = records;
-          
-          updatePressIndicator(i, records);
-        } catch (err) {
-          console.error(`Error loading status for press ${i}:`, err);
-        }
-      }
-    }
-
-    function updatePressIndicator(pressNum, records) {
-      const indicator = document.getElementById(`status-indicator-${pressNum}`);
-      if (!indicator) return;
-      
-      if (records.length > 0) {
-        const latestRecord = records[0];
-        
-        if (!latestRecord.endTime || latestRecord.endTime.trim() === '') {
-          indicator.className = 'status-indicator status-working';
-        } else {
-          indicator.className = 'status-indicator status-idle';
-        }
-      } else {
-        indicator.className = 'status-indicator status-idle';
-      }
-    }
-
-    async function loadData() {
-      const fromDateStr = document.getElementById("fromDate").value;
-      const toDateStr = document.getElementById("toDate").value;
-
-      if (!fromDateStr || !toDateStr) {
-        alert("Please enter both dates in DD/MM/YYYY format");
-        return;
-      }
-
-      const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
-      if (!datePattern.test(fromDateStr) || !datePattern.test(toDateStr)) {
-        alert("Invalid date format. Please use DD/MM/YYYY");
-        return;
-      }
-
-      const fromDate = formatDateToYYYYMMDD(fromDateStr);
-      const toDate = formatDateToYYYYMMDD(toDateStr);
-
-      showLoading(true);
-
-      try {
-        const url = `${SCRIPT_URL}?action=getData&press=${currentPress}&fromDate=${fromDate}&toDate=${toDate}`;
-        const response = await fetch(url);
-        const data = await response.json();
-
-        allData = data.records || sampleData; // Use sample data if no records
-        displayData(allData);
-        updateStats(allData);
-        
-        updatePressIndicator(currentPress, allData);
-      } catch (err) {
-        console.error("Error loading data:", err);
-        // Use sample data if there's an error
-        allData = sampleData;
-        displayData(allData);
-        updateStats(allData);
-        showLoading(false);
-      }
-    }
-
-    function formatDateToDDMMYYYY(date) {
-      const dd = String(date.getDate()).padStart(2, '0');
-      const mm = String(date.getMonth() + 1).padStart(2, '0');
-      const yyyy = date.getFullYear();
-      return `${dd}/${mm}/${yyyy}`;
-    }
-
-    function formatDateToYYYYMMDD(dateStr) {
-      const parts = dateStr.split('/');
-      if (parts.length !== 3) return '';
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-
-    function parseTimeToMinutes(timeStr, dateStr) {
-      if (!timeStr) return 0;
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      return hours * 60 + minutes;
-    }
-
-    function calculateIdleTime(currentStartTime, currentDate, previousEndTime, previousDate) {
-      if (!previousEndTime || !currentStartTime) return null;
-      
-      // Parse dates
-      const currDateParts = currentDate.split('/');
-      const prevDateParts = previousDate.split('/');
-      
-      const currDate = new Date(currDateParts[2], currDateParts[1] - 1, currDateParts[0]);
-      const prevDate = new Date(prevDateParts[2], prevDateParts[1] - 1, prevDateParts[0]);
-      
-      // Parse times (assuming hh:mm:ss format, but handle hh:mm as well)
-      const currTimeParts = currentStartTime.split(':').map(Number);
-      const prevTimeParts = previousEndTime.split(':').map(Number);
-      
-      const currHours = currTimeParts[0] || 0;
-      const currMinutes = currTimeParts[1] || 0;
-      const currSeconds = currTimeParts[2] || 0;
-      
-      const prevHours = prevTimeParts[0] || 0;
-      const prevMinutes = prevTimeParts[1] || 0;
-      const prevSeconds = prevTimeParts[2] || 0;
-      
-      currDate.setHours(currHours, currMinutes, currSeconds, 0);
-      prevDate.setHours(prevHours, prevMinutes, prevSeconds, 0);
-      
-      const diffMs = currDate - prevDate;
-      const diffSeconds = Math.floor(diffMs / 1000);
-      
-      if (diffSeconds < 0) return null;
-      
-      const hours = Math.floor(diffSeconds / 3600);
-      const mins = Math.floor((diffSeconds % 3600) / 60);
-      const secs = diffSeconds % 60;
-      
-      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    }
-
-    function displayData(records) {
-      const tbody = document.getElementById("tableBody");
-      tbody.innerHTML = "";
-      showLoading(false);
-
-      if (records.length === 0) {
-        document.getElementById("noDataContainer").style.display = "block";
-        document.getElementById("dataTable").style.display = "none";
-        return;
-      }
-
-      document.getElementById("noDataContainer").style.display = "none";
-      document.getElementById("dataTable").style.display = "table";
-
-      records.forEach((rec, index) => {
-        const tr = document.createElement("tr");
-        
-        const isInProgress = index === 0 && (!rec.endTime || rec.endTime.trim() === '');
-        
-        let cls = "", dCls = "normal";
-        
-        if (isInProgress) {
-          cls = "in-progress";
-          dCls = "in-progress";
-        } else {
-          const durMins = parseDuration(rec.duration);
-          const durSeconds = durMins * 60;
-          
-          if (durSeconds >= 1790) {
-            cls = "success";
-            dCls = "success";
-          } else if (durMins < 25) {
-            cls = "danger";
-            dCls = "danger";
-          } else {
-            cls = "warning";
-            dCls = "warning";
-          }
-        }
-
-        // Calculate idle time
-        let idleTimeStr = '00:00:00';
-        if (index < records.length - 1) {
-          const previousRec = records[index + 1];
-          if (previousRec.endTime && previousRec.endTime.trim() !== '' && rec.startTime) {
-            const idle = calculateIdleTime(rec.startTime, rec.date, previousRec.endTime, previousRec.date);
-            if (idle) idleTimeStr = idle;
-          }
-        }
-
-        tr.className = cls;
-        tr.innerHTML = `
-          <td>${rec.date}</td>
-          <td>${rec.startTime}</td>
-          <td>${rec.endTime || 'Pressing'}</td>
-          <td class="duration ${dCls}">${rec.duration || 'Pressing'}</td>
-          <td class="idle-time">${idleTimeStr}</td>`;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function parseDuration(d) {
-      if (!d) return 0;
-      const p = d.split(":");
-      return parseInt(p[0]) + parseInt(p[1]) / 60;
-    }
-
-    function updateStats(records) {
-      document.getElementById("totalPresses").textContent = records.length;
-      if (!records.length) {
-        document.getElementById("avgDuration").textContent = "0:00";
-        document.getElementById("belowThirty").textContent = "0";
-        return;
-      }
-
-      const completedRecords = records.filter(r => r.endTime && r.endTime.trim() !== '');
-
-      if (completedRecords.length === 0) {
-        document.getElementById("avgDuration").textContent = "0:00";
-        document.getElementById("belowThirty").textContent = "0";
-        return;
-      }
-
-      let total = 0, below = 0;
-      
-      completedRecords.forEach((r) => {
-        const m = parseDuration(r.duration);
-        const seconds = m * 60;
-        total += m;
-        
-        if (seconds < 1790) {
-          below++;
-        }
-      });
-
-      const avg = total / completedRecords.length;
-      const m = Math.floor(avg);
-      const s = Math.round((avg - m) * 60);
-      document.getElementById("avgDuration").textContent = `${m} mins ${s} secs`;
-      document.getElementById("belowThirty").textContent = below;
-    }
-
-    function showLoading(show) {
-      document.getElementById("loadingContainer").style.display = show
-        ? "block"
-        : "none";
-    }
-
-    function exportToExcel() {
-      if (!allData.length) {
-        alert("No data to export");
-        return;
-      }
-
-      let csv = "DATE,START TIME,END TIME,PRESS DURATION,IDLE TIME\n";
-      allData.forEach((r, index) => {
-        let idleTimeStr = '00:00:00';
-        if (index < allData.length - 1) {
-          const previousRec = allData[index + 1];
-          if (previousRec.endTime && previousRec.endTime.trim() !== '' && r.startTime) {
-            const idle = calculateIdleTime(r.startTime, r.date, previousRec.endTime, previousRec.date);
-            if (idle) idleTimeStr = idle;
-          }
-        }
-        csv += `${r.date},${r.startTime},${r.endTime || 'Pressing'},${r.duration || 'Pressing'},${idleTimeStr}\n`;
-      });
-
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Press_${currentPress}_Data_${new Date()
-        .toISOString()
-        .split("T")[0]}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      animation.onfinish = () => {
+        repel.remove();
+      };
     }
   </script>
 </body>
 </html>
-
+deepseek_html_20251106_e701c2.txt
+Displaying deepseek_html_20251106_e701c2.txt.
