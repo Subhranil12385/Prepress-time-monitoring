@@ -1189,7 +1189,7 @@
           tr.classList.add("in-progress");
         } else {
           const duration = parseDuration(row.duration);
-          if (duration >= 30 * 60) {
+          if (duration >= 28 * 60) {
             tr.classList.add("success");
           } else if (duration >= 25 * 60) {
             tr.classList.add("warning");
@@ -1439,7 +1439,7 @@
       
       if (!durationStr || durationStr === "Pressing") {
         return "in-progress";
-      } else if (duration >= 30 * 60) {
+      } else if (duration >= 28 * 60) {
         return "success";
       } else if (duration >= 25 * 60) {
         return "warning";
@@ -1670,3 +1670,4 @@
   </script>
 </body>
 </html>
+
