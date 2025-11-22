@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Pre Press Monitoring System</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/themes/material_blue.css">
 
   <style>
     * {
@@ -17,10 +18,11 @@
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
-      padding: 20px;
+      padding: 10px;
       transition: all 0.5s ease;
       position: relative;
       overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body.dark-mode {
@@ -28,16 +30,15 @@
       color: #f0e6d2;
     }
 
-    /* Theme Toggle */
     .theme-toggle {
       position: fixed;
-      top: 20px;
-      right: 20px;
+      top: 10px;
+      right: 10px;
       z-index: 1000;
       background: rgba(255, 255, 255, 0.2);
       border-radius: 50%;
-      width: 50px;
-      height: 50px;
+      width: 44px;
+      height: 44px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -53,15 +54,12 @@
     }
 
     .theme-toggle svg {
-      width: 24px;
-      height: 24px;
+      width: 22px;
+      height: 22px;
       transition: all 0.5s ease;
     }
 
-    .theme-toggle .sun {
-      color: #ffd700;
-    }
-
+    .theme-toggle .sun { color: #ffd700; }
     .theme-toggle .moon {
       color: #f0e6d2;
       opacity: 0;
@@ -79,7 +77,6 @@
       transform: rotate(0deg);
     }
 
-    /* Dark Mode Elements */
     body.dark-mode .container {
       background: #1a1a1a;
       border: 2px solid #d4af37;
@@ -96,9 +93,7 @@
       border-bottom: 2px solid #d4af37;
     }
 
-    body.dark-mode .control-group label {
-      color: #f0e6d2;
-    }
+    body.dark-mode .control-group label { color: #f0e6d2; }
 
     body.dark-mode input[type="text"].date-input {
       background: #1a1a1a;
@@ -111,9 +106,7 @@
       box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
     }
 
-    body.dark-mode .calendar-icon {
-      color: #d4af37;
-    }
+    body.dark-mode .calendar-icon { color: #d4af37; }
 
     body.dark-mode .press-btn {
       background: #1a1a1a;
@@ -141,22 +134,16 @@
       background: linear-gradient(135deg, #d4af37 0%, #b8941f 100%);
     }
 
-    body.dark-mode tbody tr {
-      border-bottom: 1px solid #333;
-    }
+    body.dark-mode tbody tr { border-bottom: 1px solid #333; }
 
     body.dark-mode tbody tr:hover {
       background: rgba(212, 175, 55, 0.1);
       box-shadow: 0 2px 8px rgba(212, 175, 55, 0.2);
     }
 
-    body.dark-mode tbody td {
-      color: #f0e6d2;
-    }
+    body.dark-mode tbody td { color: #f0e6d2; }
 
-    body.dark-mode .stats {
-      background: #2a2a2a;
-    }
+    body.dark-mode .stats { background: #2a2a2a; }
 
     body.dark-mode .stat-card {
       background: #1a1a1a;
@@ -164,15 +151,9 @@
       color: #f0e6d2;
     }
 
-    body.dark-mode .stat-card h3 {
-      color: #d4af37;
-    }
+    body.dark-mode .stat-card h3 { color: #d4af37; }
+    body.dark-mode .stat-card .value { color: #ffd700; }
 
-    body.dark-mode .stat-card .value {
-      color: #ffd700;
-    }
-
-    /* Fireflies - Increased z-index to appear above table */
     .firefly {
       position: fixed;
       width: 4px;
@@ -182,10 +163,10 @@
       filter: blur(1px);
       box-shadow: 0 0 10px 2px #ffd700;
       opacity: 0;
-      z-index: 10; /* Increased from 1 to 10 */
+      z-index: 10;
+      pointer-events: none;
     }
 
-    /* Orbs - Increased z-index to appear above table */
     .orb {
       position: fixed;
       width: 80px;
@@ -194,10 +175,10 @@
       background: radial-gradient(circle, rgba(212,175,55,0.4) 0%, rgba(212,175,55,0) 70%);
       filter: blur(5px);
       opacity: 0.3;
-      z-index: 10; /* Increased from 1 to 10 */
+      z-index: 10;
+      pointer-events: none;
     }
 
-    /* Meteor Shower - Increased z-index to appear above table */
     .meteor {
       position: fixed;
       width: 2px;
@@ -205,13 +186,11 @@
       background: linear-gradient(to bottom, transparent, #ffd700);
       transform: rotate(-45deg);
       opacity: 0;
-      z-index: 10; /* Increased from 1 to 10 */
+      z-index: 10;
+      pointer-events: none;
     }
 
-    /* Lantern Cursor */
-    body.dark-mode {
-      cursor: none;
-    }
+    body.dark-mode { cursor: none; }
 
     .lantern-cursor {
       position: fixed;
@@ -223,9 +202,7 @@
       transition: opacity 0.3s;
     }
 
-    body.dark-mode .lantern-cursor {
-      opacity: 1;
-    }
+    body.dark-mode .lantern-cursor { opacity: 1; }
 
     .lantern-body {
       width: 30px;
@@ -247,13 +224,8 @@
       transform: translateX(-50%);
     }
 
-    .lantern-top {
-      top: -5px;
-    }
-
-    .lantern-bottom {
-      bottom: -5px;
-    }
+    .lantern-top { top: -5px; }
+    .lantern-bottom { bottom: -5px; }
 
     .lantern-light {
       position: absolute;
@@ -267,7 +239,6 @@
       filter: blur(10px);
     }
 
-    /* Repel Effect */
     .repel-effect {
       position: fixed;
       width: 100px;
@@ -279,95 +250,96 @@
       opacity: 0;
     }
 
-    /* Scrollbar for Dark Mode */
-    body.dark-mode ::-webkit-scrollbar-thumb {
-      background: #d4af37;
-    }
+    body.dark-mode ::-webkit-scrollbar-thumb { background: #d4af37; }
+    body.dark-mode ::-webkit-scrollbar-thumb:hover { background: #b8941f; }
 
-    body.dark-mode ::-webkit-scrollbar-thumb:hover {
-      background: #b8941f;
-    }
-
-    /* Original styles remain the same, just adding dark mode overrides */
-    ::-webkit-scrollbar {
-      width: 10px;
-      height: 10px;
-    }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-thumb {
       background: #a1a1a1;
       border-radius: 10px;
     }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #7f7f7f;
-    }
+    ::-webkit-scrollbar-thumb:hover { background: #7f7f7f; }
 
     .container {
       max-width: 1200px;
       margin: 0 auto;
       background: white;
-      border-radius: 15px;
+      border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
       transition: all 0.5s ease;
       position: relative;
-      z-index: 2; /* Container has lower z-index than celestial elements */
+      z-index: 2;
     }
 
     .header {
       background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
-      padding: 30px;
+      padding: 20px 15px;
       text-align: center;
       transition: all 0.5s ease;
     }
 
     .header h1 {
       color: white;
-      font-size: 2.5em;
+      font-size: 1.6em;
       text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
 
     .datetime {
       color: white;
-      font-size: 1.2em;
+      font-size: 0.95em;
       text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
     }
 
     .controls {
       background: #f8f9fa;
-      padding: 25px;
+      padding: 15px;
       display: flex;
-      flex-wrap: wrap;
-      gap: 15px;
-      align-items: center;
+      flex-direction: column;
+      gap: 12px;
       border-bottom: 3px solid #e9ecef;
       transition: all 0.5s ease;
     }
 
+    .date-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
     .control-group {
       display: flex;
-      gap: 10px;
-      align-items: center;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+      min-width: 140px;
     }
 
     .control-group label {
       font-weight: 600;
       color: #495057;
+      font-size: 0.9em;
     }
 
     .date-input-wrapper {
       position: relative;
-      display: inline-block;
+      display: block;
+      width: 100%;
     }
 
     input[type="text"].date-input {
-      padding: 10px 40px 10px 15px;
+      padding: 12px 40px 12px 12px;
       border: 2px solid #dee2e6;
       border-radius: 8px;
-      font-size: 1em;
+      font-size: 16px;
       transition: 0.3s;
-      width: 170px;
+      width: 100%;
       cursor: pointer;
+      background: white;
+      -webkit-appearance: none;
+      appearance: none;
     }
 
     input[type="text"].date-input:focus {
@@ -378,7 +350,7 @@
 
     .calendar-icon {
       position: absolute;
-      right: 10px;
+      right: 12px;
       top: 50%;
       transform: translateY(-50%);
       width: 20px;
@@ -386,10 +358,11 @@
       stroke-width: 1.8;
       color: #495057;
       cursor: pointer;
+      pointer-events: none;
     }
 
     .btn {
-      padding: 12px 30px;
+      padding: 12px 24px;
       border: none;
       border-radius: 8px;
       font-size: 1em;
@@ -398,14 +371,17 @@
       transition: all 0.3s ease;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      min-height: 44px;
+      touch-action: manipulation;
     }
 
     .btn-view {
       background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
       color: white;
+      flex-shrink: 0;
     }
 
-    .btn-view:hover {
+    .btn-view:hover, .btn-view:active {
       transform: translateY(-2px);
       box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
     }
@@ -413,21 +389,23 @@
     .btn-export {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
+      padding: 10px 16px;
+      font-size: 0.85em;
     }
 
-    .btn-export:hover {
+    .btn-export:hover, .btn-export:active {
       transform: translateY(-2px);
       box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
     }
 
     .press-selector {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
     }
 
     .press-btn {
-      padding: 10px 20px;
+      padding: 10px 12px;
       border: 2px solid #dee2e6;
       border-radius: 8px;
       background: white;
@@ -437,26 +415,31 @@
       color: #495057;
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
+      gap: 6px;
+      font-size: 0.85em;
+      min-height: 44px;
+      touch-action: manipulation;
     }
 
     .press-btn.active {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       border-color: #667eea;
-      transform: scale(1.05);
+      transform: scale(1.02);
     }
 
-    .press-btn:hover {
-      transform: translateY(-2px);
+    .press-btn:hover, .press-btn:active {
+      transform: translateY(-1px);
       box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
     }
 
     .status-indicator {
-      width: 12px;
-      height: 12px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       display: inline-block;
+      flex-shrink: 0;
     }
 
     .status-working {
@@ -483,7 +466,7 @@
 
     .section {
       background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
-      padding: 20px 30px;
+      padding: 15px;
       transition: all 0.5s ease;
     }
 
@@ -491,40 +474,76 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
     }
 
     .section h2 {
       color: white;
-      font-size: 2em;
+      font-size: 1.3em;
       text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
     }
 
     .loading {
       text-align: center;
-      padding: 40px;
+      padding: 30px;
       color: #6c757d;
-      font-size: 1.2em;
+      font-size: 1.1em;
+    }
+
+    .loading-quote {
+      font-style: italic;
+      margin-top: 15px;
+      font-size: 1em;
+      min-height: 1.5em;
+      animation: fadeInQuote 0.5s ease, colorShift 3s ease-in-out infinite;
+      background: linear-gradient(90deg, #667eea, #764ba2, #f6d365, #fda085, #11998e, #667eea);
+      background-size: 300% 100%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: 600;
+    }
+
+    @keyframes fadeInQuote {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes colorShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    body.dark-mode .loading {
+      color: #d4af37;
+    }
+
+    body.dark-mode .loading-quote {
+      background: linear-gradient(90deg, #ffd700, #d4af37, #fff5cc, #d4af37, #ffd700);
+      background-size: 300% 100%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .spinner {
       border: 4px solid #f3f3f3;
       border-top: 4px solid #667eea;
       border-radius: 50%;
-      width: 40px;
-      height: 40px;
+      width: 36px;
+      height: 36px;
       animation: spin 1s linear infinite;
-      margin: 20px auto;
+      margin: 15px auto;
     }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     .table-container {
-      padding: 30px;
+      padding: 15px;
       overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     table {
@@ -535,6 +554,7 @@
       overflow: hidden;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
       transition: all 0.5s ease;
+      min-width: 500px;
     }
 
     thead {
@@ -543,21 +563,25 @@
 
     thead th {
       color: white;
-      padding: 18px;
+      padding: 12px 10px;
       text-align: left;
-      font-size: 1.1em;
+      font-size: 0.85em;
       text-transform: uppercase;
+    }
+
+    thead th small {
+      font-size: 0.75em;
+      font-weight: normal;
+      opacity: 0.9;
     }
 
     tbody tr {
       border-bottom: 1px solid #e9ecef;
-      transition: background 0.4s ease, transform 0.2s ease;
+      transition: background 0.4s ease;
     }
 
     tbody tr:hover {
-      transform: scale(1.01);
       background: rgba(102, 126, 234, 0.05);
-      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
     }
 
     tbody tr.in-progress {
@@ -566,12 +590,8 @@
     }
 
     @keyframes fade-glow {
-      0%, 100% {
-        background: rgba(33, 150, 243, 0.15);
-      }
-      50% {
-        background: rgba(33, 150, 243, 0.35);
-      }
+      0%, 100% { background: rgba(33, 150, 243, 0.15); }
+      50% { background: rgba(33, 150, 243, 0.35); }
     }
 
     tbody tr.success {
@@ -588,40 +608,25 @@
     }
 
     @keyframes danger-pulse {
-      0%, 100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.8;
-      }
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
     }
 
     tbody td {
-      padding: 15px 18px;
+      padding: 12px 10px;
       color: #495057;
-      font-size: 1em;
+      font-size: 0.9em;
     }
 
     .duration {
       font-weight: 700;
-      font-size: 1.1em;
+      font-size: 1em;
     }
 
-    .duration.success {
-      color: #28a745;
-    }
-
-    .duration.in-progress {
-      color: #2196f3;
-    }
-
-    .duration.warning {
-      color: #ffc107;
-    }
-
-    .duration.danger {
-      color: #dc3545;
-    }
+    .duration.success { color: #28a745; }
+    .duration.in-progress { color: #2196f3; }
+    .duration.warning { color: #ffc107; }
+    .duration.danger { color: #dc3545; }
 
     .idle-time {
       font-weight: 600;
@@ -630,71 +635,72 @@
 
     .no-data {
       text-align: center;
-      padding: 60px 20px;
+      padding: 40px 15px;
       color: #6c757d;
-      font-size: 1.2em;
+      font-size: 1.1em;
     }
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
-      padding: 30px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 15px;
       background: #f8f9fa;
       transition: all 0.5s ease;
     }
 
     .stat-card {
       background: white;
-      padding: 20px;
-      border-radius: 10px;
+      padding: 12px 8px;
+      border-radius: 8px;
       text-align: center;
       box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
       transition: 0.3s;
     }
 
     .stat-card:hover {
-      transform: translateY(-5px);
+      transform: translateY(-3px);
       box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
     }
 
     .stat-card h3 {
       color: #6c757d;
-      font-size: 0.9em;
-      margin-bottom: 5px;
+      font-size: 0.7em;
+      margin-bottom: 3px;
       text-transform: uppercase;
     }
 
     .stat-card .subtitle {
       color: #9ca3af;
-      font-size: 0.7em;
-      margin-bottom: 10px;
+      font-size: 0.6em;
+      margin-bottom: 6px;
     }
 
     .stat-card .value {
-      font-size: 1.5em;
+      font-size: 1.2em;
       font-weight: bold;
       color: #667eea;
     }
 
-    /* New styles for All Presses section */
     .all-presses-container {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 20px;
-      padding: 20px;
+      grid-template-columns: 1fr;
+      gap: 15px;
+      padding: 10px;
     }
 
     .mini-table-container {
       background: white;
-      border-radius: 8px;
+      border-radius: 10px;
       overflow: hidden;
+      border: 1px solid #dee2e6;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      transition: transform 0.3s ease;
+      transition: all 0.3s ease;
     }
 
     .mini-table-container:hover {
-      transform: translateY(-5px);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.2);
     }
 
     .mini-table-header {
@@ -705,12 +711,14 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      font-size: 0.95em;
     }
 
     .mini-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.85em;
+      font-size: 0.8em;
+      background: white;
     }
 
     .mini-table th {
@@ -720,15 +728,21 @@
       font-weight: 600;
       color: #495057;
       border-bottom: 1px solid #dee2e6;
+      text-transform: uppercase;
+      font-size: 0.85em;
+      letter-spacing: 0.3px;
     }
 
     .mini-table td {
-      padding: 8px;
+      padding: 10px 8px;
       border-bottom: 1px solid #e9ecef;
+      color: #495057;
     }
 
-    .mini-table tr:last-child td {
-      border-bottom: none;
+    .mini-table tr:last-child td { border-bottom: none; }
+
+    .mini-table tr:hover {
+      background: rgba(102, 126, 234, 0.05);
     }
 
     .mini-table .duration {
@@ -738,78 +752,211 @@
 
     .more-entries {
       text-align: center;
-      padding: 10px;
+      padding: 12px;
       color: #667eea;
       cursor: pointer;
       font-weight: 600;
       transition: all 0.3s ease;
       background: rgba(102, 126, 234, 0.05);
+      border-top: 1px solid #e9ecef;
     }
 
-    .more-entries:hover {
+    .more-entries:hover, .more-entries:active {
       background: rgba(102, 126, 234, 0.1);
       color: #5a67d8;
     }
 
+    /* Dark mode mini tables */
+    body.dark-mode .mini-table-container {
+      background: #1a1a1a;
+      border: 2px solid #d4af37;
+      box-shadow: 0 4px 15px rgba(212, 175, 55, 0.15);
+    }
+
+    body.dark-mode .mini-table-container:hover {
+      box-shadow: 0 6px 20px rgba(212, 175, 55, 0.25);
+    }
+
+    body.dark-mode .mini-table-header {
+      background: linear-gradient(135deg, #d4af37 0%, #b8941f 100%);
+      color: #1a1a1a;
+    }
+
+    body.dark-mode .mini-table {
+      background: #1a1a1a;
+    }
+
+    body.dark-mode .mini-table th {
+      background: #2a2a2a;
+      color: #d4af37;
+      border-bottom: 1px solid #d4af37;
+    }
+
+    body.dark-mode .mini-table td {
+      border-bottom: 1px solid #333;
+      color: #f0e6d2;
+    }
+
+    body.dark-mode .mini-table tr:hover {
+      background: rgba(212, 175, 55, 0.1);
+    }
+
+    body.dark-mode .more-entries {
+      color: #d4af37;
+      background: rgba(212, 175, 55, 0.1);
+      border-top: 1px solid #333;
+    }
+
+    body.dark-mode .more-entries:hover, body.dark-mode .more-entries:active {
+      background: rgba(212, 175, 55, 0.2);
+      color: #ffd700;
+    }
+
     .all-press-stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 15px;
-      padding: 20px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      padding: 10px;
     }
 
     .all-stat-card {
       background: white;
-      padding: 15px;
-      border-radius: 8px;
+      padding: 15px 12px;
+      border-radius: 10px;
       text-align: center;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border: 1px solid #dee2e6;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
+    }
+
+    .all-stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.2);
     }
 
     .all-stat-card h4 {
       color: #6c757d;
-      font-size: 0.8em;
-      margin-bottom: 5px;
+      font-size: 0.75em;
+      margin-bottom: 6px;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .all-stat-card .value {
-      font-size: 1.2em;
+      font-size: 1.3em;
       font-weight: bold;
       color: #667eea;
     }
 
-    @media (max-width: 768px) {
-      .header h1 {
-        font-size: 1.8em;
+    /* Dark mode all-stat-cards */
+    body.dark-mode .all-stat-card {
+      background: #1a1a1a;
+      border: 2px solid #d4af37;
+      box-shadow: 0 4px 15px rgba(212, 175, 55, 0.15);
+    }
+
+    body.dark-mode .all-stat-card:hover {
+      box-shadow: 0 6px 20px rgba(212, 175, 55, 0.25);
+    }
+
+    body.dark-mode .all-stat-card h4 {
+      color: #d4af37;
+    }
+
+    body.dark-mode .all-stat-card .value {
+      color: #ffd700;
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+    }
+
+    /* Flatpickr mobile fixes */
+    .flatpickr-calendar {
+      font-size: 14px !important;
+    }
+
+    .flatpickr-day {
+      height: 40px !important;
+      line-height: 40px !important;
+    }
+
+    .flatpickr-months {
+      padding: 5px 0 !important;
+    }
+
+    @media (min-width: 768px) {
+      body { padding: 20px; }
+
+      .header { padding: 30px; }
+      .header h1 { font-size: 2.2em; }
+      .datetime { font-size: 1.2em; }
+
+      .controls { padding: 20px; }
+
+      .date-controls {
+        flex-wrap: nowrap;
       }
 
-      .controls {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .control-group {
-        flex-direction: column;
-        align-items: stretch;
-      }
+      .control-group { min-width: 160px; }
 
       .press-selector {
-        justify-content: center;
+        grid-template-columns: repeat(6, auto);
       }
 
-      table {
+      .press-btn {
+        padding: 10px 18px;
         font-size: 0.9em;
       }
 
+      .section { padding: 20px 30px; }
+      .section h2 { font-size: 1.8em; }
+
+      .table-container { padding: 30px; }
+
+      table { min-width: auto; }
+
+      thead th {
+        padding: 18px;
+        font-size: 1em;
+      }
+
+      tbody td {
+        padding: 15px 18px;
+        font-size: 1em;
+      }
+
+      .stats {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        padding: 30px;
+      }
+
+      .stat-card {
+        padding: 20px;
+      }
+
+      .stat-card h3 { font-size: 0.9em; }
+      .stat-card .value { font-size: 1.5em; }
+
       .all-presses-container {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+        padding: 20px;
+      }
+
+      .all-press-stats {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+        padding: 20px;
+      }
+    }
+
+    @media (min-width: 1024px) {
+      .all-presses-container {
+        grid-template-columns: repeat(3, 1fr);
       }
     }
   </style>
 </head>
 <body>
-  <!-- Theme Toggle Button -->
   <div class="theme-toggle" id="themeToggle">
     <svg class="sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="5"></circle>
@@ -827,7 +974,6 @@
     </svg>
   </div>
 
-  <!-- Lantern Cursor -->
   <div class="lantern-cursor" id="lanternCursor">
     <div class="lantern-top"></div>
     <div class="lantern-body"></div>
@@ -842,34 +988,33 @@
     </div>
 
     <div class="controls">
-      <div class="control-group">
-        <label>From Date:</label>
-        <div class="date-input-wrapper">
-          <input type="text" class="date-input" id="fromDate" placeholder="DD/MM/YYYY" />
-          <svg class="calendar-icon" id="fromDateIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
-          </svg>
+      <div class="date-controls">
+        <div class="control-group">
+          <label>From Date:</label>
+          <div class="date-input-wrapper">
+            <input type="text" class="date-input" id="fromDate" placeholder="DD/MM/YYYY" readonly />
+            <svg class="calendar-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
         </div>
-      </div>
-      <div class="control-group">
-        <label>To Date:</label>
-        <div class="date-input-wrapper">
-          <input type="text" class="date-input" id="toDate" placeholder="DD/MM/YYYY" />
-          <svg class="calendar-icon" id="toDateIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
-          </svg>
+        <div class="control-group">
+          <label>To Date:</label>
+          <div class="date-input-wrapper">
+            <input type="text" class="date-input" id="toDate" placeholder="DD/MM/YYYY" readonly />
+            <svg class="calendar-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
         </div>
+        <button class="btn btn-view" onclick="loadData()">VIEW</button>
       </div>
-      <button class="btn btn-view" onclick="loadData()">VIEW</button>
-    </div>
-
-    <div class="controls">
       <div class="control-group">
         <label>Select Press:</label>
         <div class="press-selector" id="pressButtons"></div>
@@ -882,7 +1027,7 @@
         <div class="value" id="totalPresses">0</div>
       </div>
       <div class="stat-card">
-        <h3>Average Duration</h3>
+        <h3>Avg Duration</h3>
         <div class="value" id="avgDuration">0:00</div>
       </div>
       <div class="stat-card">
@@ -895,34 +1040,34 @@
     <div class="section">
       <div class="section-header">
         <h2 id="pressTitle">All Pre Presses</h2>
-        <button class="btn btn-export" onclick="exportToExcel()">Export To Excel</button>
+        <button class="btn btn-export" onclick="exportToExcel()">Export</button>
       </div>
     </div>
 
-    <!-- All Presses Section (Default View) -->
     <div class="table-container" id="allPressesContainer">
-      <div class="all-press-stats" id="allPressStats">
-        <!-- Stats for all presses will be populated here -->
+      <div id="allPressLoadingContainer" class="loading">
+        <div class="spinner"></div>
+        <p>Loading data...</p>
+        <p class="loading-quote" id="allPressLoadingQuote"></p>
       </div>
-      <div class="all-presses-container" id="allPressesTables">
-        <!-- Mini tables for all presses will be populated here -->
-      </div>
+      <div class="all-press-stats" id="allPressStats"></div>
+      <div class="all-presses-container" id="allPressesTables"></div>
     </div>
 
-    <!-- Single Press Section (Hidden by Default) -->
     <div class="table-container" id="singlePressContainer" style="display: none">
       <div id="loadingContainer" class="loading">
         <div class="spinner"></div>
         <p>Loading data...</p>
+        <p class="loading-quote" id="singlePressLoadingQuote"></p>
       </div>
       <table id="dataTable" style="display: none">
         <thead>
           <tr>
-            <th>DATE<br><small style="font-size: 0.7em; font-weight: normal; opacity: 0.9;">dd-mm-yyyy</small></th>
-            <th>START TIME<br><small style="font-size: 0.7em; font-weight: normal; opacity: 0.9;">hh:mm:ss</small></th>
-            <th>END TIME<br><small style="font-size: 0.7em; font-weight: normal; opacity: 0.9;">hh:mm:ss</small></th>
-            <th>PRESS DURATION<br><small style="font-size: 0.7em; font-weight: normal; opacity: 0.9;">mm:ss</small></th>
-            <th>IDLE TIME<br><small style="font-size: 0.7em; font-weight: normal; opacity: 0.9;">hh:mm:ss</small></th>
+            <th>DATE<br><small>dd-mm-yyyy</small></th>
+            <th>START<br><small>hh:mm:ss</small></th>
+            <th>END<br><small>hh:mm:ss</small></th>
+            <th>DURATION<br><small>mm:ss</small></th>
+            <th>IDLE<br><small>hh:mm:ss</small></th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -937,76 +1082,195 @@
   <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyr8sSqhIin24puQuzh0yN4I1tJ5TXecoJPWBZPgiZ2toWy6Mk1HqtZxAO12cmAECqg/exec";
 
+    const LOADING_QUOTES = [
+      "Every step forward counts.",
+      "Patience builds great results.",
+      "Good things take a moment.",
+      "Progress is happening.",
+      "Stay hopeful; it's on the way.",
+      "Great outcomes begin with small starts.",
+      "Your wait will be worth it.",
+      "Everything is aligning for you.",
+      "Let the journey unfold.",
+      "Believe in the process.",
+      "We're moving forward—slowly but surely.",
+      "Nothing great happens instantly.",
+      "Trust the timing.",
+      "You're closer than you think.",
+      "The path is being prepared.",
+      "Even delays have purpose.",
+      "Patience is silent strength.",
+      "Every moment builds something.",
+      "Hold on—good is coming.",
+      "One moment can change everything.",
+      "Still faster than government paperwork.",
+      "Loading… because teleportation isn't invented yet.",
+      "Hold on… brewing digital coffee.",
+      "Loading… please don't blink aggressively.",
+      "We're not slow. You're just fast.",
+      "Buffering… like my brain on Mondays.",
+      "Loading… summoning the tech gods.",
+      "Almost ready. The intern is running.",
+      "Working… unlike my Wi-Fi sometimes.",
+      "Loading… 99% done (just kidding).",
+      "Preparing stuff you didn't ask for.",
+      "Loading… trust the process. Or don't.",
+      "We're making progress… somewhere.",
+      "Just a sec… arguing with the server.",
+      "Loading… praying nobody unplugged something.",
+      "Almost there… finishing a long nap.",
+      "Patience… we only broke one thing.",
+      "Loading… chasing missing semicolons.",
+      "Still loading… like your favorite game updates.",
+      "Processing… please hold your applause.",
+      "Compiling… don't disturb the electrons.",
+      "Loading… optimizing algorithmic magic.",
+      "Fetching data packets…",
+      "Executing subroutines… standby.",
+      "Loading… recalibrating system states.",
+      "Synchronizing with server…",
+      "De-referencing null expectations.",
+      "Loading… avoiding race conditions.",
+      "Hashing… encrypting… breathing.",
+      "Pinging the universe for answers…",
+      "Loading… aligning datasets.",
+      "Debug mode: OFF (for now).",
+      "Initiating background threads…",
+      "Loading… rewriting logic on the fly.",
+      "Running diagnostics… wait a sec.",
+      "Performing handshake with reality.",
+      "Loading… the CPU is doing cardio.",
+      "Optimizing memory pathways.",
+      "Loading… compressing inefficiency.",
+      "Executing high-priority human patience request.",
+      "Loading… aligning billions of table cells.",
+      "Sorting columns… and my life.",
+      "Loading rows… please don't count them.",
+      "Formatting tables… the real boss fight.",
+      "Fetching data… hope you like rows.",
+      "Loading… because these tables don't fill themselves.",
+      "Preparing rows, columns, chaos.",
+      "Loading… ironing out wrinkled tables.",
+      "Still loading… too many cells escaped.",
+      "Summoning the Table Overlord…"
+    ];
+
+    function getRandomQuote() {
+      return LOADING_QUOTES[Math.floor(Math.random() * LOADING_QUOTES.length)];
+    }
+
+    function updateLoadingQuotes() {
+      document.getElementById("allPressLoadingQuote").textContent = getRandomQuote();
+      document.getElementById("singlePressLoadingQuote").textContent = getRandomQuote();
+    }
+
     let currentPress = "all";
     let allData = {};
-    let pressStatusData = {};
+    let todayStatusData = {}; // Store today's data for status indicators
     let fromDatePicker, toDatePicker;
     let darkMode = false;
     let fireflies = [];
     let orbs = [];
     let meteors = [];
+    let meteorInterval = null;
 
     document.addEventListener("DOMContentLoaded", () => {
       updateDateTime();
       setInterval(updateDateTime, 1000);
 
       const today = new Date();
-      const todayStr = formatDateToDDMMYYYY(today);
       
-      // Initialize Flatpickr date pickers
+      // Initialize Flatpickr with explicit onChange to fix mobile issues
       fromDatePicker = flatpickr("#fromDate", {
         dateFormat: "d/m/Y",
         defaultDate: today,
-        allowInput: true,
+        allowInput: false,
         clickOpens: true,
-        parseDate: (datestr, format) => {
-          const parts = datestr.split('/');
-          if (parts.length === 3) {
-            return new Date(parts[2], parts[1] - 1, parts[0]);
+        disableMobile: false,
+        onChange: function(selectedDates, dateStr, instance) {
+          // Explicitly set the input value for mobile compatibility
+          if (selectedDates.length > 0) {
+            const d = selectedDates[0];
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            instance.input.value = `${day}/${month}/${year}`;
           }
-          return null;
+        },
+        onReady: function(selectedDates, dateStr, instance) {
+          // Set initial value
+          if (selectedDates.length > 0) {
+            const d = selectedDates[0];
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            instance.input.value = `${day}/${month}/${year}`;
+          }
         }
       });
 
       toDatePicker = flatpickr("#toDate", {
         dateFormat: "d/m/Y",
         defaultDate: today,
-        allowInput: true,
+        allowInput: false,
         clickOpens: true,
-        parseDate: (datestr, format) => {
-          const parts = datestr.split('/');
-          if (parts.length === 3) {
-            return new Date(parts[2], parts[1] - 1, parts[0]);
+        disableMobile: false,
+        onChange: function(selectedDates, dateStr, instance) {
+          // Explicitly set the input value for mobile compatibility
+          if (selectedDates.length > 0) {
+            const d = selectedDates[0];
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            instance.input.value = `${day}/${month}/${year}`;
           }
-          return null;
+        },
+        onReady: function(selectedDates, dateStr, instance) {
+          // Set initial value
+          if (selectedDates.length > 0) {
+            const d = selectedDates[0];
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            instance.input.value = `${day}/${month}/${year}`;
+          }
         }
       });
 
-      // Add click events to calendar icons
-      document.getElementById("fromDateIcon").addEventListener("click", () => {
-        fromDatePicker.open();
-      });
-
-      document.getElementById("toDateIcon").addEventListener("click", () => {
-        toDatePicker.open();
-      });
-
-      // Initialize press buttons
       initializePressButtons();
-
-      // Set default dates
-      document.getElementById("fromDate").value = todayStr;
-      document.getElementById("toDate").value = todayStr;
-
-      // Load initial data for all presses
       loadData();
+      
+      // Load today's data for status indicators and refresh every 30 seconds
+      loadTodayStatusData();
+      setInterval(loadTodayStatusData, 30000);
 
-      // Initialize theme toggle
       document.getElementById("themeToggle").addEventListener("click", toggleTheme);
-
-      // Initialize lantern cursor
       initializeLanternCursor();
     });
+
+    // Fetch today's data specifically for status indicators
+    async function loadTodayStatusData() {
+      try {
+        const today = new Date();
+        const todayFormatted = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        
+        const promises = [];
+        for (let press = 1; press <= 5; press++) {
+          promises.push(fetchDataForPress(press, todayFormatted, todayFormatted));
+        }
+        
+        const results = await Promise.all(promises);
+        
+        results.forEach((result, idx) => {
+          todayStatusData[idx + 1] = result.records || [];
+        });
+        
+        // Update status indicators based on today's data
+        updatePressStatus();
+      } catch (error) {
+        console.error("Error loading today's status data:", error);
+      }
+    }
 
     function updateDateTime() {
       const now = new Date();
@@ -1019,17 +1283,7 @@
         minute: "2-digit",
         second: "2-digit",
       };
-      document.getElementById("currentDateTime").textContent = now.toLocaleDateString(
-        "en-US",
-        options
-      );
-    }
-
-    function formatDateToDDMMYYYY(date) {
-      const day = String(date.getDate()).padStart(2, "0");
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const year = date.getFullYear();
-      return `${day}/${month}/${year}`;
+      document.getElementById("currentDateTime").textContent = now.toLocaleDateString("en-US", options);
     }
 
     function formatDateToYYYYMMDD(dateStr) {
@@ -1039,51 +1293,34 @@
     }
 
     function initializePressButtons() {
-      const pressButtonsContainer = document.getElementById("pressButtons");
-      pressButtonsContainer.innerHTML = "";
+      const container = document.getElementById("pressButtons");
+      container.innerHTML = "";
 
-      // Add "All" button (active by default)
-      const allButton = document.createElement("button");
-      allButton.className = "press-btn active";
-      allButton.innerHTML = `
-        <span class="status-indicator status-working"></span>
-        All Presses
-      `;
-      allButton.onclick = () => selectPress("all");
-      pressButtonsContainer.appendChild(allButton);
+      const allBtn = document.createElement("button");
+      allBtn.className = "press-btn active";
+      allBtn.innerHTML = `<span class="status-indicator status-working"></span>All`;
+      allBtn.onclick = () => selectPress("all");
+      container.appendChild(allBtn);
 
-      // Add individual press buttons
       for (let i = 1; i <= 5; i++) {
-        const button = document.createElement("button");
-        button.className = "press-btn";
-        button.innerHTML = `
-          <span class="status-indicator status-idle"></span>
-          Press ${i}
-        `;
-        button.onclick = () => selectPress(i);
-        pressButtonsContainer.appendChild(button);
+        const btn = document.createElement("button");
+        btn.className = "press-btn";
+        btn.innerHTML = `<span class="status-indicator status-idle"></span>Press ${i}`;
+        btn.onclick = () => selectPress(i);
+        container.appendChild(btn);
       }
     }
 
     function selectPress(press) {
       currentPress = press;
       
-      // Update button states
-      document.querySelectorAll(".press-btn").forEach((btn, index) => {
-        if (index === 0 && press === "all") {
-          btn.classList.add("active");
-        } else if (index === press) {
-          btn.classList.add("active");
-        } else {
-          btn.classList.remove("active");
-        }
+      document.querySelectorAll(".press-btn").forEach((btn, idx) => {
+        btn.classList.toggle("active", (idx === 0 && press === "all") || idx === press);
       });
 
-      // Update press title
       document.getElementById("pressTitle").textContent = 
         press === "all" ? "All Pre Presses" : `Pre Press - ${press}`;
 
-      // Show/hide appropriate containers
       if (press === "all") {
         document.getElementById("singlePressContainer").style.display = "none";
         document.getElementById("allPressesContainer").style.display = "block";
@@ -1100,55 +1337,63 @@
       const toDate = document.getElementById("toDate").value;
 
       if (!fromDate || !toDate) {
-        alert("Please select both from and to dates.");
+        alert("Please select both dates.");
         return;
       }
 
-      // Show loading state
+      // Update loading quotes with random messages
+      updateLoadingQuotes();
+
+      // Show loading state for both sections
       document.getElementById("loadingContainer").style.display = "block";
       document.getElementById("dataTable").style.display = "none";
       document.getElementById("noDataContainer").style.display = "none";
+      
+      // Show loading for all presses section
+      document.getElementById("allPressLoadingContainer").style.display = "block";
+      document.getElementById("allPressStats").style.display = "none";
+      document.getElementById("allPressesTables").style.display = "none";
 
       try {
-        // Convert dates to YYYY-MM-DD format for API
-        const fromDateFormatted = formatDateToYYYYMMDD(fromDate);
-        const toDateFormatted = formatDateToYYYYMMDD(toDate);
+        const fromFormatted = formatDateToYYYYMMDD(fromDate);
+        const toFormatted = formatDateToYYYYMMDD(toDate);
 
-        // Load data for all presses
         allData = {};
-        const pressPromises = [];
+        const promises = [];
 
         for (let press = 1; press <= 5; press++) {
-          pressPromises.push(
-            fetchDataForPress(press, fromDateFormatted, toDateFormatted)
-          );
+          promises.push(fetchDataForPress(press, fromFormatted, toFormatted));
         }
 
-        // Wait for all data to load
-        const results = await Promise.all(pressPromises);
+        const results = await Promise.all(promises);
         
-        // Process results
-        results.forEach((result, index) => {
-          const pressNum = index + 1;
-          allData[pressNum] = result.records || [];
+        results.forEach((result, idx) => {
+          allData[idx + 1] = result.records || [];
         });
 
-        // Update press status indicators
+        // Also load today's status data if not already loaded
+        if (Object.keys(todayStatusData).length === 0) {
+          await loadTodayStatusData();
+        }
+
         updatePressStatus();
 
-        // Display data based on current selection
         if (currentPress === "all") {
           displayAllPresses();
         } else {
           displaySinglePress(currentPress);
         }
 
-        // Hide loading state
+        // Hide loading states
         document.getElementById("loadingContainer").style.display = "none";
+        document.getElementById("allPressLoadingContainer").style.display = "none";
       } catch (error) {
         console.error("Error loading data:", error);
         document.getElementById("loadingContainer").style.display = "none";
         document.getElementById("noDataContainer").style.display = "block";
+        document.getElementById("allPressLoadingContainer").style.display = "none";
+        document.getElementById("allPressStats").style.display = "grid";
+        document.getElementById("allPressesTables").style.display = "grid";
       }
     }
 
@@ -1156,23 +1401,18 @@
       try {
         const url = `${SCRIPT_URL}?action=getData&press=${press}&fromDate=${fromDate}&toDate=${toDate}`;
         const response = await fetch(url);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        return data;
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return await response.json();
       } catch (error) {
-        console.error(`Error fetching data for press ${press}:`, error);
+        console.error(`Error fetching press ${press}:`, error);
         return { records: [] };
       }
     }
 
     function displaySinglePress(press) {
       const data = allData[press] || [];
-      const tableBody = document.getElementById("tableBody");
-      tableBody.innerHTML = "";
+      const tbody = document.getElementById("tableBody");
+      tbody.innerHTML = "";
 
       if (data.length === 0) {
         document.getElementById("loadingContainer").style.display = "none";
@@ -1181,30 +1421,24 @@
         return;
       }
 
-      data.forEach((row, index) => {
+      data.forEach((row, idx) => {
         const tr = document.createElement("tr");
         
-        // Determine row class based on duration
         if (!row.endTime || row.endTime.trim() === '') {
           tr.classList.add("in-progress");
         } else {
           const duration = parseDuration(row.duration);
-          if (duration >= 28 * 60) {
-            tr.classList.add("success");
-          } else if (duration >= 25 * 60) {
-            tr.classList.add("warning");
-          } else {
-            tr.classList.add("danger");
-          }
+          if (duration >= 28 * 60) tr.classList.add("success");
+          else if (duration >= 25 * 60) tr.classList.add("warning");
+          else tr.classList.add("danger");
         }
 
-        // Calculate idle time
-        let idleTimeStr = '00:00:00';
-        if (index < data.length - 1) {
-          const previousRec = data[index + 1];
-          if (previousRec.endTime && previousRec.endTime.trim() !== '' && row.startTime) {
-            const idle = calculateIdleTime(row.startTime, row.date, previousRec.endTime, previousRec.date);
-            if (idle) idleTimeStr = idle;
+        let idleStr = '00:00:00';
+        if (idx < data.length - 1) {
+          const prev = data[idx + 1];
+          if (prev.endTime && prev.endTime.trim() !== '' && row.startTime) {
+            const idle = calculateIdleTime(row.startTime, row.date, prev.endTime, prev.date);
+            if (idle) idleStr = idle;
           }
         }
 
@@ -1213,285 +1447,231 @@
           <td>${row.startTime}</td>
           <td>${row.endTime || "In Progress"}</td>
           <td class="duration ${getDurationClass(row.duration)}">${row.duration || "Pressing"}</td>
-          <td class="idle-time">${idleTimeStr}</td>
+          <td class="idle-time">${idleStr}</td>
         `;
-        tableBody.appendChild(tr);
+        tbody.appendChild(tr);
       });
 
       document.getElementById("loadingContainer").style.display = "none";
       document.getElementById("dataTable").style.display = "table";
       document.getElementById("noDataContainer").style.display = "none";
 
-      // Update stats for single press
       updateStatsForPress(press);
     }
 
     function displayAllPresses() {
-      const allPressesTables = document.getElementById("allPressesTables");
-      const allPressStats = document.getElementById("allPressStats");
+      const tables = document.getElementById("allPressesTables");
+      const stats = document.getElementById("allPressStats");
       
-      allPressesTables.innerHTML = "";
-      allPressStats.innerHTML = "";
+      // Show the containers
+      stats.style.display = "grid";
+      tables.style.display = "grid";
+      
+      tables.innerHTML = "";
+      stats.innerHTML = "";
 
-      // Calculate overall stats
-      let totalPresses = 0;
-      let totalDuration = 0;
-      let belowThirtyCount = 0;
-      let workingPresses = 0;
+      let total = 0, totalDur = 0, below30 = 0, working = 0;
 
-      // Create mini tables for each press
       for (let press = 1; press <= 5; press++) {
         const data = allData[press] || [];
-        totalPresses += data.length;
+        const todayData = todayStatusData[press] || [];
+        total += data.length;
         
-        // Calculate press-specific stats
-        let pressTotalDuration = 0;
-        let pressBelowThirty = 0;
-        let pressWorking = false;
+        let pressDur = 0, pressBelow = 0;
+        // Use today's data for working status (real-time)
+        const pressWorking = todayData.some(row => !row.endTime || row.endTime.trim() === '');
         
         data.forEach(row => {
-          const duration = parseDuration(row.duration);
-          pressTotalDuration += duration;
-          
-          if (duration < 30 * 60) {
-            pressBelowThirty++;
-          }
-          
-          if (!row.endTime || row.endTime.trim() === '') {
-            pressWorking = true;
-          }
+          const dur = parseDuration(row.duration);
+          pressDur += dur;
+          if (dur < 30 * 60) pressBelow++;
         });
         
-        totalDuration += pressTotalDuration;
-        belowThirtyCount += pressBelowThirty;
-        if (pressWorking) workingPresses++;
+        totalDur += pressDur;
+        below30 += pressBelow;
+        if (pressWorking) working++;
 
-        // Create mini table container
-        const miniTableContainer = document.createElement("div");
-        miniTableContainer.className = "mini-table-container";
+        const container = document.createElement("div");
+        container.className = "mini-table-container";
         
-        // Create header
-        const header = document.createElement("div");
-        header.className = "mini-table-header";
-        header.innerHTML = `
-          <span class="status-indicator ${pressWorking ? 'status-working' : 'status-idle'}"></span>
-          Pre Press - ${press}
+        container.innerHTML = `
+          <div class="mini-table-header">
+            <span class="status-indicator ${pressWorking ? 'status-working' : 'status-idle'}"></span>
+            Pre Press - ${press}
+          </div>
+          <table class="mini-table">
+            <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr></thead>
+            <tbody>
+              ${data.slice(0, 3).map(row => `
+                <tr>
+                  <td>${row.date}</td>
+                  <td>${row.startTime}</td>
+                  <td>${row.endTime || "In Progress"}</td>
+                  <td class="duration ${getDurationClass(row.duration)}">${row.duration || "Pressing"}</td>
+                </tr>
+              `).join('')}
+              ${data.length > 3 ? `<tr><td colspan="4" class="more-entries" onclick="expandPress(${press})">+${data.length - 3} more</td></tr>` : ''}
+              ${data.length === 0 ? '<tr><td colspan="4" class="no-data-cell" style="text-align:center;padding:20px;">No data</td></tr>' : ''}
+            </tbody>
+          </table>
         `;
-        miniTableContainer.appendChild(header);
-        
-        // Create mini table
-        const miniTable = document.createElement("table");
-        miniTable.className = "mini-table";
-        
-        // Create table header
-        const thead = document.createElement("thead");
-        thead.innerHTML = `
-          <tr>
-            <th>Date</th>
-            <th>Start</th>
-            <th>End</th>
-            <th>Duration</th>
-          </tr>
-        `;
-        miniTable.appendChild(thead);
-        
-        // Create table body
-        const tbody = document.createElement("tbody");
-        
-        // Add up to 3 rows (or all if less than 3)
-        const rowsToShow = data.slice(0, 3);
-        rowsToShow.forEach(row => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${row.date}</td>
-            <td>${row.startTime}</td>
-            <td>${row.endTime || "In Progress"}</td>
-            <td class="duration ${getDurationClass(row.duration)}">${row.duration || "Pressing"}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-        
-        // Add "More..." row if there are more than 3 entries
-        if (data.length > 3) {
-          const tr = document.createElement("tr");
-          const remainingCount = data.length - 3;
-          tr.innerHTML = `
-            <td colspan="4" class="more-entries" onclick="expandPress(${press})">
-              +${remainingCount} more entries
-            </td>
-          `;
-          tbody.appendChild(tr);
-        }
-        
-        // Add "No data" message if empty
-        if (data.length === 0) {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td colspan="4" style="text-align: center; color: #6c757d;">
-              No data available
-            </td>
-          `;
-          tbody.appendChild(tr);
-        }
-        
-        miniTable.appendChild(tbody);
-        miniTableContainer.appendChild(miniTable);
-        allPressesTables.appendChild(miniTableContainer);
+        tables.appendChild(container);
       }
 
-      // Update overall stats
-      const avgDuration = totalPresses > 0 ? formatDuration(totalDuration / totalPresses) : "0:00";
+      const avg = total > 0 ? formatDuration(totalDur / total) : "0:00";
       
-      document.getElementById("totalPresses").textContent = totalPresses;
-      document.getElementById("avgDuration").textContent = avgDuration;
-      document.getElementById("belowThirty").textContent = belowThirtyCount;
+      document.getElementById("totalPresses").textContent = total;
+      document.getElementById("avgDuration").textContent = avg;
+      document.getElementById("belowThirty").textContent = below30;
       
-      // Create stats for all presses
-      allPressStats.innerHTML = `
-        <div class="all-stat-card">
-          <h4>Total Entries</h4>
-          <div class="value">${totalPresses}</div>
-        </div>
-        <div class="all-stat-card">
-          <h4>Avg Duration</h4>
-          <div class="value">${avgDuration}</div>
-        </div>
-        <div class="all-stat-card">
-          <h4>Below 30 Min</h4>
-          <div class="value">${belowThirtyCount}</div>
-        </div>
-        <div class="all-stat-card">
-          <h4>Working Presses</h4>
-          <div class="value">${workingPresses}/5</div>
-        </div>
+      stats.innerHTML = `
+        <div class="all-stat-card"><h4>Total Entries</h4><div class="value">${total}</div></div>
+        <div class="all-stat-card"><h4>Avg Duration</h4><div class="value">${avg}</div></div>
+        <div class="all-stat-card"><h4>Below 30 Min</h4><div class="value">${below30}</div></div>
+        <div class="all-stat-card"><h4>Working</h4><div class="value">${working}/5</div></div>
       `;
     }
 
-    function expandPress(pressNumber) {
-      // Switch to the selected press
-      selectPress(pressNumber);
-      
-      // Scroll to the table section for better UX
-      document.getElementById('singlePressContainer').scrollIntoView({ 
-        behavior: 'smooth' 
-      });
+    function expandPress(num) {
+      selectPress(num);
+      document.getElementById('singlePressContainer').scrollIntoView({ behavior: 'smooth' });
     }
 
     function updateStatsForPress(press) {
       const data = allData[press] || [];
-      const totalPresses = data.length;
-      
-      let totalDuration = 0;
-      let belowThirtyCount = 0;
+      let totalDur = 0, below30 = 0;
       
       data.forEach(row => {
-        const duration = parseDuration(row.duration);
-        totalDuration += duration;
-        
-        if (duration < 30 * 60) {
-          belowThirtyCount++;
-        }
+        const dur = parseDuration(row.duration);
+        totalDur += dur;
+        if (dur < 30 * 60) below30++;
       });
       
-      const avgDuration = totalPresses > 0 ? formatDuration(totalDuration / totalPresses) : "0:00";
-      
-      document.getElementById("totalPresses").textContent = totalPresses;
-      document.getElementById("avgDuration").textContent = avgDuration;
-      document.getElementById("belowThirty").textContent = belowThirtyCount;
+      document.getElementById("totalPresses").textContent = data.length;
+      document.getElementById("avgDuration").textContent = data.length > 0 ? formatDuration(totalDur / data.length) : "0:00";
+      document.getElementById("belowThirty").textContent = below30;
     }
 
     function updatePressStatus() {
-      // Update press status indicators based on data
+      // Use todayStatusData for real-time status indicators (always based on today's data)
       for (let press = 1; press <= 5; press++) {
-        const data = allData[press] || [];
+        const data = todayStatusData[press] || [];
+        // Check if there's any entry with no end time (currently in progress)
         const isWorking = data.some(row => !row.endTime || row.endTime.trim() === '');
         
         // Update status indicator in press buttons
-        const pressButtons = document.querySelectorAll(".press-btn");
-        if (pressButtons[press]) {
-          const indicator = pressButtons[press].querySelector(".status-indicator");
-          if (indicator) {
-            indicator.className = `status-indicator ${isWorking ? 'status-working' : 'status-idle'}`;
-          }
+        const btns = document.querySelectorAll(".press-btn");
+        if (btns[press]) {
+          const ind = btns[press].querySelector(".status-indicator");
+          if (ind) ind.className = `status-indicator ${isWorking ? 'status-working' : 'status-idle'}`;
         }
       }
     }
 
-    function parseDuration(durationStr) {
-      if (!durationStr) return 0;
-      
-      const parts = durationStr.split(':');
-      if (parts.length === 2) {
-        return parseInt(parts[0]) * 60 + parseInt(parts[1]);
-      }
-      
-      return 0;
+    function parseDuration(str) {
+      if (!str) return 0;
+      const parts = str.split(':');
+      return parts.length === 2 ? parseInt(parts[0]) * 60 + parseInt(parts[1]) : 0;
     }
 
-    function formatDuration(seconds) {
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = Math.floor(seconds % 60);
-      return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+    function formatDuration(secs) {
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
-    function getDurationClass(durationStr) {
-      const duration = parseDuration(durationStr);
-      
-      if (!durationStr || durationStr === "Pressing") {
-        return "in-progress";
-      } else if (duration >= 28 * 60) {
-        return "success";
-      } else if (duration >= 25 * 60) {
-        return "warning";
-      } else {
-        return "danger";
-      }
+    function getDurationClass(str) {
+      const dur = parseDuration(str);
+      if (!str || str === "Pressing") return "in-progress";
+      if (dur >= 28 * 60) return "success";
+      if (dur >= 25 * 60) return "warning";
+      return "danger";
     }
 
-    function calculateIdleTime(currentStartTime, currentDate, previousEndTime, previousDate) {
-      if (!previousEndTime || !currentStartTime) return null;
+    function calculateIdleTime(currStart, currDate, prevEnd, prevDate) {
+      if (!prevEnd || !currStart) return null;
       
-      // Parse dates
-      const currDateParts = currentDate.split('/');
-      const prevDateParts = previousDate.split('/');
+      const currParts = currDate.split('/');
+      const prevParts = prevDate.split('/');
       
-      const currDate = new Date(currDateParts[2], currDateParts[1] - 1, currDateParts[0]);
-      const prevDate = new Date(prevDateParts[2], prevDateParts[1] - 1, prevDateParts[0]);
+      const curr = new Date(currParts[2], currParts[1] - 1, currParts[0]);
+      const prev = new Date(prevParts[2], prevParts[1] - 1, prevParts[0]);
       
-      // Parse times (assuming hh:mm:ss format, but handle hh:mm as well)
-      const currTimeParts = currentStartTime.split(':').map(Number);
-      const prevTimeParts = previousEndTime.split(':').map(Number);
+      const currTime = currStart.split(':').map(Number);
+      const prevTime = prevEnd.split(':').map(Number);
       
-      const currHours = currTimeParts[0] || 0;
-      const currMinutes = currTimeParts[1] || 0;
-      const currSeconds = currTimeParts[2] || 0;
+      curr.setHours(currTime[0] || 0, currTime[1] || 0, currTime[2] || 0, 0);
+      prev.setHours(prevTime[0] || 0, prevTime[1] || 0, prevTime[2] || 0, 0);
       
-      const prevHours = prevTimeParts[0] || 0;
-      const prevMinutes = prevTimeParts[1] || 0;
-      const prevSeconds = prevTimeParts[2] || 0;
+      const diffSec = Math.floor((curr - prev) / 1000);
+      if (diffSec < 0) return null;
       
-      currDate.setHours(currHours, currMinutes, currSeconds, 0);
-      prevDate.setHours(prevHours, prevMinutes, prevSeconds, 0);
+      const h = Math.floor(diffSec / 3600);
+      const m = Math.floor((diffSec % 3600) / 60);
+      const s = diffSec % 60;
       
-      const diffMs = currDate - prevDate;
-      const diffSeconds = Math.floor(diffMs / 1000);
-      
-      if (diffSeconds < 0) return null;
-      
-      const hours = Math.floor(diffSeconds / 3600);
-      const mins = Math.floor((diffSeconds % 3600) / 60);
-      const secs = diffSeconds % 60;
-      
-      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     }
 
     function exportToExcel() {
+      const fromDate = document.getElementById("fromDate").value;
+      const toDate = document.getElementById("toDate").value;
+      
+      let csvContent = "";
+      let filename = "";
+      
       if (currentPress === "all") {
-        alert("Exporting all presses data to Excel...");
-        // Implementation for exporting all presses data
+        // Export all presses data
+        filename = `All_Presses_${fromDate.replace(/\//g, '-')}_to_${toDate.replace(/\//g, '-')}.csv`;
+        csvContent = "Press,Date,Start Time,End Time,Duration\n";
+        
+        for (let press = 1; press <= 5; press++) {
+          const data = allData[press] || [];
+          data.forEach(row => {
+            csvContent += `Press ${press},${row.date},${row.startTime},${row.endTime || "In Progress"},${row.duration || "Pressing"}\n`;
+          });
+        }
       } else {
-        alert(`Exporting Press ${currentPress} data to Excel...`);
-        // Implementation for exporting single press data
+        // Export single press data
+        filename = `Press_${currentPress}_${fromDate.replace(/\//g, '-')}_to_${toDate.replace(/\//g, '-')}.csv`;
+        csvContent = "Date,Start Time,End Time,Duration,Idle Time\n";
+        
+        const data = allData[currentPress] || [];
+        data.forEach((row, idx) => {
+          let idleStr = '00:00:00';
+          if (idx < data.length - 1) {
+            const prev = data[idx + 1];
+            if (prev.endTime && prev.endTime.trim() !== '' && row.startTime) {
+              const idle = calculateIdleTime(row.startTime, row.date, prev.endTime, prev.date);
+              if (idle) idleStr = idle;
+            }
+          }
+          csvContent += `${row.date},${row.startTime},${row.endTime || "In Progress"},${row.duration || "Pressing"},${idleStr}\n`;
+        });
+      }
+      
+      // Check if there's data to export
+      if (csvContent.split('\n').length <= 2) {
+        alert("No data available to export.");
+        return;
+      }
+      
+      // Create and download the CSV file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      
+      if (navigator.msSaveBlob) {
+        // IE 10+
+        navigator.msSaveBlob(blob, filename);
+      } else {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       }
     }
 
@@ -1499,176 +1679,103 @@
       darkMode = !darkMode;
       document.body.classList.toggle("dark-mode", darkMode);
       
-      if (darkMode) {
-        createCelestialEffects();
-      } else {
-        removeCelestialEffects();
-      }
+      if (darkMode) createCelestialEffects();
+      else removeCelestialEffects();
     }
 
     function createCelestialEffects() {
-      // Create fireflies
-      for (let i = 0; i < 15; i++) {
-        createFirefly();
-      }
-      
-      // Create orbs
-      for (let i = 0; i < 5; i++) {
-        createOrb();
-      }
-      
-      // Create meteors
-      setInterval(createMeteor, 2000);
+      for (let i = 0; i < 15; i++) createFirefly();
+      for (let i = 0; i < 5; i++) createOrb();
+      meteorInterval = setInterval(createMeteor, 2000);
     }
 
     function removeCelestialEffects() {
-      // Remove all celestial elements
-      document.querySelectorAll('.firefly, .orb, .meteor').forEach(el => {
-        el.remove();
-      });
-      
-      // Clear intervals
+      document.querySelectorAll('.firefly, .orb, .meteor').forEach(el => el.remove());
+      if (meteorInterval) clearInterval(meteorInterval);
       fireflies = [];
       orbs = [];
       meteors = [];
     }
 
     function createFirefly() {
-      const firefly = document.createElement('div');
-      firefly.className = 'firefly';
-      document.body.appendChild(firefly);
+      const el = document.createElement('div');
+      el.className = 'firefly';
+      document.body.appendChild(el);
       
-      const startX = Math.random() * window.innerWidth;
-      const startY = Math.random() * window.innerHeight;
+      el.style.left = `${Math.random() * window.innerWidth}px`;
+      el.style.top = `${Math.random() * window.innerHeight}px`;
       
-      firefly.style.left = `${startX}px`;
-      firefly.style.top = `${startY}px`;
-      
-      // Animate firefly
-      const duration = 3000 + Math.random() * 4000;
-      const keyframes = [
-        { transform: `translate(0, 0)`, opacity: 0 },
+      const anim = el.animate([
+        { transform: 'translate(0, 0)', opacity: 0 },
         { transform: `translate(${Math.random() * 100 - 50}px, ${Math.random() * 100 - 50}px)`, opacity: 0.8 },
         { transform: `translate(${Math.random() * 100 - 50}px, ${Math.random() * 100 - 50}px)`, opacity: 0 }
-      ];
+      ], { duration: 3000 + Math.random() * 4000, iterations: Infinity, easing: 'ease-in-out' });
       
-      const animation = firefly.animate(keyframes, {
-        duration: duration,
-        iterations: Infinity,
-        easing: 'ease-in-out'
-      });
-      
-      fireflies.push({
-        element: firefly,
-        animation: animation
-      });
+      fireflies.push({ element: el, animation: anim });
     }
 
     function createOrb() {
-      const orb = document.createElement('div');
-      orb.className = 'orb';
-      document.body.appendChild(orb);
+      const el = document.createElement('div');
+      el.className = 'orb';
+      document.body.appendChild(el);
       
       const size = 40 + Math.random() * 80;
-      orb.style.width = `${size}px`;
-      orb.style.height = `${size}px`;
+      el.style.width = `${size}px`;
+      el.style.height = `${size}px`;
+      el.style.left = `${Math.random() * window.innerWidth}px`;
+      el.style.top = `${Math.random() * window.innerHeight}px`;
       
-      const startX = Math.random() * window.innerWidth;
-      const startY = Math.random() * window.innerHeight;
-      
-      orb.style.left = `${startX}px`;
-      orb.style.top = `${startY}px`;
-      
-      // Animate orb
-      const duration = 10000 + Math.random() * 15000;
-      const keyframes = [
-        { transform: `translate(0, 0)`, opacity: 0.1 },
+      const anim = el.animate([
+        { transform: 'translate(0, 0)', opacity: 0.1 },
         { transform: `translate(${Math.random() * 200 - 100}px, ${Math.random() * 200 - 100}px)`, opacity: 0.4 },
         { transform: `translate(${Math.random() * 200 - 100}px, ${Math.random() * 200 - 100}px)`, opacity: 0.1 }
-      ];
+      ], { duration: 10000 + Math.random() * 15000, iterations: Infinity, easing: 'ease-in-out' });
       
-      const animation = orb.animate(keyframes, {
-        duration: duration,
-        iterations: Infinity,
-        easing: 'ease-in-out'
-      });
-      
-      orbs.push({
-        element: orb,
-        animation: animation
-      });
+      orbs.push({ element: el, animation: anim });
     }
 
     function createMeteor() {
-      const meteor = document.createElement('div');
-      meteor.className = 'meteor';
-      document.body.appendChild(meteor);
+      const el = document.createElement('div');
+      el.className = 'meteor';
+      document.body.appendChild(el);
       
-      const startX = Math.random() * window.innerWidth;
-      const startY = -50;
+      el.style.left = `${Math.random() * window.innerWidth}px`;
+      el.style.top = '-50px';
       
-      meteor.style.left = `${startX}px`;
-      meteor.style.top = `${startY}px`;
-      
-      // Animate meteor
-      const duration = 1000 + Math.random() * 2000;
-      const distance = 300 + Math.random() * 400;
-      
-      const keyframes = [
+      const dist = 300 + Math.random() * 400;
+      const anim = el.animate([
         { transform: 'translate(0, 0) rotate(-45deg)', opacity: 0 },
-        { transform: `translate(${distance}px, ${distance}px) rotate(-45deg)`, opacity: 1 },
-        { transform: `translate(${distance * 1.2}px, ${distance * 1.2}px) rotate(-45deg)`, opacity: 0 }
-      ];
+        { transform: `translate(${dist}px, ${dist}px) rotate(-45deg)`, opacity: 1 },
+        { transform: `translate(${dist * 1.2}px, ${dist * 1.2}px) rotate(-45deg)`, opacity: 0 }
+      ], { duration: 1000 + Math.random() * 2000, iterations: 1, easing: 'ease-in' });
       
-      const animation = meteor.animate(keyframes, {
-        duration: duration,
-        iterations: 1,
-        easing: 'ease-in'
-      });
-      
-      animation.onfinish = () => {
-        meteor.remove();
-      };
-      
-      meteors.push(meteor);
+      anim.onfinish = () => el.remove();
+      meteors.push(el);
     }
 
     function initializeLanternCursor() {
-      const lanternCursor = document.getElementById('lanternCursor');
+      const lantern = document.getElementById('lanternCursor');
       
       document.addEventListener('mousemove', (e) => {
-        lanternCursor.style.left = `${e.clientX - 20}px`;
-        lanternCursor.style.top = `${e.clientY - 30}px`;
+        lantern.style.left = `${e.clientX - 20}px`;
+        lantern.style.top = `${e.clientY - 30}px`;
         
-        // Create repel effect
-        createRepelEffect(e.clientX, e.clientY);
+        if (darkMode) {
+          const repel = document.createElement('div');
+          repel.className = 'repel-effect';
+          repel.style.left = `${e.clientX - 50}px`;
+          repel.style.top = `${e.clientY - 50}px`;
+          document.body.appendChild(repel);
+          
+          const anim = repel.animate([
+            { transform: 'scale(0.5)', opacity: 0.6 },
+            { transform: 'scale(1.5)', opacity: 0 }
+          ], { duration: 800, easing: 'ease-out' });
+          
+          anim.onfinish = () => repel.remove();
+        }
       });
-    }
-
-    function createRepelEffect(x, y) {
-      if (!darkMode) return;
-      
-      const repel = document.createElement('div');
-      repel.className = 'repel-effect';
-      repel.style.left = `${x - 50}px`;
-      repel.style.top = `${y - 50}px`;
-      document.body.appendChild(repel);
-      
-      // Animate repel effect
-      const animation = repel.animate([
-        { transform: 'scale(0.5)', opacity: 0.6 },
-        { transform: 'scale(1.5)', opacity: 0 }
-      ], {
-        duration: 800,
-        easing: 'ease-out'
-      });
-      
-      animation.onfinish = () => {
-        repel.remove();
-      };
     }
   </script>
 </body>
 </html>
-
-
