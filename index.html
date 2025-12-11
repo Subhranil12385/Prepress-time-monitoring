@@ -8,28 +8,353 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/themes/material_blue.css">
 
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
+    /* Add this new CSS for the filter slider */
+    .filter-controls {
+      position: fixed;
+      top: 60px;
+      right: 10px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
       padding: 10px;
-      transition: all 0.5s ease;
-      position: relative;
-      overflow-x: hidden;
-      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(10px);
+      border: 2px solid #667eea;
+      transition: all 0.3s ease;
+      width: 250px;
+      cursor: move;
+      user-select: none;
     }
 
-    body.dark-mode {
-      background: #0a0a0a;
+    .filter-controls.dragging {
+      opacity: 0.8;
+      cursor: grabbing;
+    }
+
+    body.dark-mode .filter-controls {
+      background: rgba(26, 26, 26, 0.95);
+      border: 2px solid #d4af37;
+      box-shadow: 0 8px 32px rgba(212, 175, 55, 0.2);
+    }
+
+    .filter-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #dee2e6;
+      cursor: default;
+    }
+
+    body.dark-mode .filter-header {
+      border-bottom-color: #333;
+    }
+
+    .filter-header h3 {
+      color: #495057;
+      font-size: 0.95em;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    body.dark-mode .filter-header h3 {
       color: #f0e6d2;
     }
 
+    .filter-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: background 0.3s ease;
+      margin-bottom: 8px;
+    }
+
+    .filter-toggle:hover {
+      background: rgba(102, 126, 234, 0.1);
+    }
+
+    body.dark-mode .filter-toggle:hover {
+      background: rgba(212, 175, 55, 0.1);
+    }
+
+    .filter-toggle label {
+      font-weight: 600;
+      color: #495057;
+      font-size: 0.9em;
+      cursor: pointer;
+      flex-grow: 1;
+    }
+
+    body.dark-mode .filter-toggle label {
+      color: #f0e6d2;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 22px;
+      background: #dee2e6;
+      border-radius: 11px;
+      transition: all 0.3s ease;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch.active {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+
+    body.dark-mode .toggle-switch {
+      background: #333;
+    }
+
+    body.dark-mode .toggle-switch.active {
+      background: linear-gradient(135deg, #d4af37 0%, #b8941f 100%);
+    }
+
+    .toggle-slider {
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.3s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .toggle-switch.active .toggle-slider {
+      transform: translateX(22px);
+    }
+
+    .filter-slider-container {
+      display: block;
+      margin-top: 8px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .slider-header label {
+      font-weight: 600;
+      color: #495057;
+      font-size: 0.85em;
+    }
+
+    body.dark-mode .slider-header label {
+      color: #f0e6d2;
+    }
+
+    .slider-value {
+      background: #667eea;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: bold;
+      font-size: 0.8em;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    body.dark-mode .slider-value {
+      background: #d4af37;
+      color: #1a1a1a;
+    }
+
+    .minute-slider {
+      width: 100%;
+      height: 5px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: linear-gradient(to right, #11998e, #38ef7d);
+      border-radius: 2px;
+      outline: none;
+      margin: 5px 0;
+    }
+
+    body.dark-mode .minute-slider {
+      background: linear-gradient(to right, #8b6914, #d4af37);
+    }
+
+    .minute-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid #11998e;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+      transition: all 0.2s ease;
+    }
+
+    .minute-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.1);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    body.dark-mode .minute-slider::-webkit-slider-thumb {
+      background: #f0e6d2;
+      border-color: #d4af37;
+    }
+
+    .minute-slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid #11998e;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    body.dark-mode .minute-slider::-moz-range-thumb {
+      background: #f0e6d2;
+      border-color: #d4af37;
+    }
+
+    .slider-info {
+      margin-top: 5px;
+      font-size: 0.75em;
+      color: #6c757d;
+      text-align: center;
+    }
+
+    body.dark-mode .slider-info {
+      color: #9ca3af;
+    }
+
+    .filtered-count {
+      margin-top: 8px;
+      padding: 6px;
+      background: rgba(102, 126, 234, 0.1);
+      border-radius: 6px;
+      text-align: center;
+      font-size: 0.8em;
+      color: #495057;
+      display: none;
+    }
+
+    .filtered-count.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    body.dark-mode .filtered-count {
+      background: rgba(212, 175, 55, 0.1);
+      color: #f0e6d2;
+    }
+
+    .filtered-count strong {
+      color: #11998e;
+      font-weight: 700;
+    }
+
+    body.dark-mode .filtered-count strong {
+      color: #d4af37;
+    }
+
+    .filter-close {
+      background: none;
+      border: none;
+      color: #6c757d;
+      font-size: 1.2em;
+      cursor: pointer;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .filter-close:hover {
+      background: rgba(0, 0, 0, 0.05);
+      color: #dc3545;
+    }
+
+    body.dark-mode .filter-close {
+      color: #9ca3af;
+    }
+
+    body.dark-mode .filter-close:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ff6b6b;
+    }
+
+    .filter-minimize {
+      background: none;
+      border: none;
+      color: #6c757d;
+      font-size: 1em;
+      cursor: pointer;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .filter-minimize:hover {
+      background: rgba(0, 0, 0, 0.05);
+      color: #495057;
+    }
+
+    body.dark-mode .filter-minimize {
+      color: #9ca3af;
+    }
+
+    body.dark-mode .filter-minimize:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #f0e6d2;
+    }
+
+    .filter-controls.minimized {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      overflow: hidden;
+      border-radius: 20px;
+      cursor: pointer;
+    }
+
+    .filter-controls.minimized .filter-content {
+      display: none;
+    }
+
+    .filter-controls.minimized .filter-minimize {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      transform: rotate(180deg);
+    }
+
+    .filter-controls.minimized .filter-header {
+      display: none;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Adjust theme toggle position */
     .theme-toggle {
       position: fixed;
       top: 10px;
@@ -75,6 +400,56 @@
     body.dark-mode .theme-toggle .moon {
       opacity: 1;
       transform: rotate(0deg);
+    }
+
+    @media (max-width: 768px) {
+      .filter-controls {
+        top: 60px;
+        right: 10px;
+        left: 10px;
+        width: auto;
+        max-width: 300px;
+        margin: 0 auto;
+      }
+    }
+
+    /* Add CSS for filter status in all-press-stats */
+    .filter-status-card {
+      grid-column: span 2;
+      text-align: center;
+      padding: 10px;
+    }
+
+    .filter-status-card .value {
+      font-size: 0.95em !important;
+      color: #11998e !important;
+      font-weight: 600;
+    }
+
+    body.dark-mode .filter-status-card .value {
+      color: #d4af37 !important;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 10px;
+      transition: all 0.5s ease;
+      position: relative;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body.dark-mode {
+      background: #0a0a0a;
+      color: #f0e6d2;
     }
 
     body.dark-mode .container {
@@ -947,6 +1322,10 @@
         gap: 15px;
         padding: 20px;
       }
+      
+      .filter-status-card {
+        grid-column: 2 / span 2;
+      }
     }
 
     @media (min-width: 1024px) {
@@ -957,6 +1336,45 @@
   </style>
 </head>
 <body>
+  <!-- Filter Controls -->
+  <div class="filter-controls" id="filterControls">
+    <div class="filter-header">
+      <h3>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+        </svg>
+        Duration Filter
+      </h3>
+      <div>
+        <button class="filter-minimize" id="filterMinimize" title="Minimize">−</button>
+        <button class="filter-close" id="filterClose" title="Close">×</button>
+      </div>
+    </div>
+    
+    <div class="filter-content">
+      <div class="filter-toggle" onclick="toggleFilter()">
+        <label>Filter Short Durations</label>
+        <div class="toggle-switch active" id="filterToggle">
+          <div class="toggle-slider"></div>
+        </div>
+      </div>
+      
+      <div class="filter-slider-container">
+        <div class="slider-header">
+          <label>Minimum Duration:</label>
+          <div class="slider-value" id="sliderValue">6 min</div>
+        </div>
+        <input type="range" min="1" max="30" value="6" class="minute-slider" id="durationSlider" 
+               oninput="updateSliderValue(this.value)" onchange="applyFilter()">
+        <div class="slider-info">Hide durations below this threshold</div>
+        
+        <div class="filtered-count" id="filteredCount">
+          Filtered out <strong id="filteredNumber">0</strong> entries
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="theme-toggle" id="themeToggle">
     <svg class="sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="5"></circle>
@@ -1166,13 +1584,24 @@
 
     let currentPress = "all";
     let allData = {};
-    let todayStatusData = {}; // Store today's data for status indicators
+    let todayStatusData = {};
     let fromDatePicker, toDatePicker;
     let darkMode = false;
     let fireflies = [];
     let orbs = [];
     let meteors = [];
     let meteorInterval = null;
+    
+    // Filter variables
+    let filterEnabled = true;
+    let filterThreshold = 6;
+    let filteredCount = 0;
+    let filterMinimized = false;
+    
+    // Dragging variables
+    let isDragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
 
     document.addEventListener("DOMContentLoaded", () => {
       updateDateTime();
@@ -1180,7 +1609,7 @@
 
       const today = new Date();
       
-      // Initialize Flatpickr with explicit onChange to fix mobile issues
+      // Initialize Flatpickr
       fromDatePicker = flatpickr("#fromDate", {
         dateFormat: "d/m/Y",
         defaultDate: today,
@@ -1188,7 +1617,6 @@
         clickOpens: true,
         disableMobile: false,
         onChange: function(selectedDates, dateStr, instance) {
-          // Explicitly set the input value for mobile compatibility
           if (selectedDates.length > 0) {
             const d = selectedDates[0];
             const day = String(d.getDate()).padStart(2, '0');
@@ -1198,7 +1626,6 @@
           }
         },
         onReady: function(selectedDates, dateStr, instance) {
-          // Set initial value
           if (selectedDates.length > 0) {
             const d = selectedDates[0];
             const day = String(d.getDate()).padStart(2, '0');
@@ -1216,7 +1643,6 @@
         clickOpens: true,
         disableMobile: false,
         onChange: function(selectedDates, dateStr, instance) {
-          // Explicitly set the input value for mobile compatibility
           if (selectedDates.length > 0) {
             const d = selectedDates[0];
             const day = String(d.getDate()).padStart(2, '0');
@@ -1226,7 +1652,6 @@
           }
         },
         onReady: function(selectedDates, dateStr, instance) {
-          // Set initial value
           if (selectedDates.length > 0) {
             const d = selectedDates[0];
             const day = String(d.getDate()).padStart(2, '0');
@@ -1237,10 +1662,23 @@
         }
       });
 
+      // Initialize filter
+      document.getElementById("durationSlider").value = filterThreshold;
+      updateSliderValue(filterThreshold);
+      
+      // Initialize filter toggle
+      document.getElementById("filterToggle").addEventListener("click", toggleFilter);
+      
+      // Initialize minimize/close buttons
+      document.getElementById("filterMinimize").addEventListener("click", toggleMinimize);
+      document.getElementById("filterClose").addEventListener("click", closeFilter);
+      
+      // Initialize dragging
+      initializeDragging();
+      
       initializePressButtons();
       loadData();
       
-      // Load today's data for status indicators and refresh every 30 seconds
       loadTodayStatusData();
       setInterval(loadTodayStatusData, 30000);
 
@@ -1248,7 +1686,184 @@
       initializeLanternCursor();
     });
 
-    // Fetch today's data specifically for status indicators
+    // Dragging functionality
+    function initializeDragging() {
+      const filterControls = document.getElementById('filterControls');
+      const header = filterControls.querySelector('.filter-header');
+      
+      header.addEventListener('mousedown', startDrag);
+      header.addEventListener('touchstart', startDragTouch);
+      
+      document.addEventListener('mousemove', drag);
+      document.addEventListener('touchmove', dragTouch);
+      document.addEventListener('mouseup', stopDrag);
+      document.addEventListener('touchend', stopDrag);
+      
+      function startDrag(e) {
+        if (filterMinimized) return;
+        isDragging = true;
+        filterControls.classList.add('dragging');
+        
+        const rect = filterControls.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        
+        e.preventDefault();
+      }
+      
+      function startDragTouch(e) {
+        if (filterMinimized) return;
+        if (e.touches.length !== 1) return;
+        
+        isDragging = true;
+        filterControls.classList.add('dragging');
+        
+        const rect = filterControls.getBoundingClientRect();
+        dragOffsetX = e.touches[0].clientX - rect.left;
+        dragOffsetY = e.touches[0].clientY - rect.top;
+        
+        e.preventDefault();
+      }
+      
+      function drag(e) {
+        if (!isDragging) return;
+        
+        let x = e.clientX - dragOffsetX;
+        let y = e.clientY - dragOffsetY;
+        
+        // Keep within viewport bounds
+        const maxX = window.innerWidth - filterControls.offsetWidth;
+        const maxY = window.innerHeight - filterControls.offsetHeight;
+        
+        x = Math.max(0, Math.min(x, maxX));
+        y = Math.max(0, Math.min(y, maxY));
+        
+        filterControls.style.left = `${x}px`;
+        filterControls.style.top = `${y}px`;
+        filterControls.style.right = 'auto';
+      }
+      
+      function dragTouch(e) {
+        if (!isDragging) return;
+        if (e.touches.length !== 1) return;
+        
+        let x = e.touches[0].clientX - dragOffsetX;
+        let y = e.touches[0].clientY - dragOffsetY;
+        
+        const maxX = window.innerWidth - filterControls.offsetWidth;
+        const maxY = window.innerHeight - filterControls.offsetHeight;
+        
+        x = Math.max(0, Math.min(x, maxX));
+        y = Math.max(0, Math.min(y, maxY));
+        
+        filterControls.style.left = `${x}px`;
+        filterControls.style.top = `${y}px`;
+        filterControls.style.right = 'auto';
+        
+        e.preventDefault();
+      }
+      
+      function stopDrag() {
+        isDragging = false;
+        filterControls.classList.remove('dragging');
+      }
+    }
+
+    function toggleMinimize() {
+      const filterControls = document.getElementById('filterControls');
+      filterMinimized = !filterMinimized;
+      
+      if (filterMinimized) {
+        filterControls.classList.add('minimized');
+        filterControls.style.width = '40px';
+        filterControls.style.height = '40px';
+        filterControls.style.cursor = 'pointer';
+        filterControls.onclick = function(e) {
+          if (filterMinimized && !e.target.closest('.filter-minimize')) {
+            toggleMinimize();
+          }
+        };
+      } else {
+        filterControls.classList.remove('minimized');
+        filterControls.style.width = '250px';
+        filterControls.style.height = 'auto';
+        filterControls.style.cursor = 'move';
+        filterControls.onclick = null;
+      }
+    }
+
+    function closeFilter() {
+      const filterControls = document.getElementById('filterControls');
+      filterControls.style.display = 'none';
+    }
+
+    // Filter Functions
+    function toggleFilter() {
+      filterEnabled = !filterEnabled;
+      const toggle = document.getElementById("filterToggle");
+      toggle.classList.toggle("active", filterEnabled);
+      
+      if (filterEnabled) {
+        applyFilter();
+      } else {
+        if (currentPress === "all") {
+          displayAllPresses();
+        } else {
+          displaySinglePress(currentPress);
+        }
+        document.getElementById("filteredCount").classList.remove("active");
+      }
+    }
+
+    function updateSliderValue(value) {
+      filterThreshold = parseInt(value);
+      document.getElementById("sliderValue").textContent = `${value} min`;
+      
+      if (filterEnabled) {
+        applyFilter();
+      }
+    }
+
+    function applyFilter() {
+      if (!filterEnabled) return;
+      
+      if (currentPress === "all") {
+        displayAllPresses();
+      } else {
+        displaySinglePress(currentPress);
+      }
+    }
+
+    function filterData(data) {
+      if (!filterEnabled) return data;
+      
+      const thresholdSeconds = filterThreshold * 60;
+      filteredCount = 0;
+      
+      const filteredData = data.filter(row => {
+        const duration = parseDuration(row.duration);
+        if (!row.endTime || row.endTime.trim() === '' || duration >= thresholdSeconds) {
+          return true;
+        } else {
+          filteredCount++;
+          return false;
+        }
+      });
+      
+      const filteredCountElement = document.getElementById("filteredCount");
+      const filteredNumberElement = document.getElementById("filteredNumber");
+      
+      filteredNumberElement.textContent = filteredCount;
+      
+      if (filteredCount > 0) {
+        filteredCountElement.classList.add("active");
+      } else {
+        filteredCountElement.classList.remove("active");
+      }
+      
+      return filteredData;
+    }
+
     async function loadTodayStatusData() {
       try {
         const today = new Date();
@@ -1265,7 +1880,6 @@
           todayStatusData[idx + 1] = result.records || [];
         });
         
-        // Update status indicators based on today's data
         updatePressStatus();
       } catch (error) {
         console.error("Error loading today's status data:", error);
@@ -1290,6 +1904,12 @@
       const parts = dateStr.split('/');
       if (parts.length !== 3) return '';
       return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+
+    function parseDate(dateStr) {
+      const parts = dateStr.split('/');
+      if (parts.length !== 3) return new Date();
+      return new Date(parts[2], parts[1] - 1, parts[0]);
     }
 
     function initializePressButtons() {
@@ -1341,15 +1961,12 @@
         return;
       }
 
-      // Update loading quotes with random messages
       updateLoadingQuotes();
 
-      // Show loading state for both sections
       document.getElementById("loadingContainer").style.display = "block";
       document.getElementById("dataTable").style.display = "none";
       document.getElementById("noDataContainer").style.display = "none";
       
-      // Show loading for all presses section
       document.getElementById("allPressLoadingContainer").style.display = "block";
       document.getElementById("allPressStats").style.display = "none";
       document.getElementById("allPressesTables").style.display = "none";
@@ -1371,7 +1988,6 @@
           allData[idx + 1] = result.records || [];
         });
 
-        // Also load today's status data if not already loaded
         if (Object.keys(todayStatusData).length === 0) {
           await loadTodayStatusData();
         }
@@ -1384,7 +2000,6 @@
           displaySinglePress(currentPress);
         }
 
-        // Hide loading states
         document.getElementById("loadingContainer").style.display = "none";
         document.getElementById("allPressLoadingContainer").style.display = "none";
       } catch (error) {
@@ -1410,7 +2025,8 @@
     }
 
     function displaySinglePress(press) {
-      const data = allData[press] || [];
+      const rawData = allData[press] || [];
+      const data = filterEnabled ? filterData(rawData) : rawData;
       const tbody = document.getElementById("tableBody");
       tbody.innerHTML = "";
 
@@ -1421,7 +2037,21 @@
         return;
       }
 
-      data.forEach((row, idx) => {
+      // Sort data by date and time (newest first)
+      const sortedData = [...data].sort((a, b) => {
+        const dateA = parseDate(a.date);
+        const dateB = parseDate(b.date);
+        if (dateA.getTime() !== dateB.getTime()) {
+          return dateB.getTime() - dateA.getTime();
+        }
+        // If same date, sort by start time
+        const timeA = a.startTime.split(':').map(Number);
+        const timeB = b.startTime.split(':').map(Number);
+        return (timeB[0] * 3600 + timeB[1] * 60 + timeB[2]) - 
+               (timeA[0] * 3600 + timeA[1] * 60 + timeA[2]);
+      });
+
+      sortedData.forEach((row, idx) => {
         const tr = document.createElement("tr");
         
         if (!row.endTime || row.endTime.trim() === '') {
@@ -1434,11 +2064,11 @@
         }
 
         let idleStr = '00:00:00';
-        if (idx < data.length - 1) {
-          const prev = data[idx + 1];
-          if (prev.endTime && prev.endTime.trim() !== '' && row.startTime) {
-            const idle = calculateIdleTime(row.startTime, row.date, prev.endTime, prev.date);
-            if (idle) idleStr = idle;
+        if (idx < sortedData.length - 1) {
+          const nextRow = sortedData[idx + 1];
+          const idle = calculateIdleTime(row.startTime, row.date, nextRow.endTime, nextRow.date);
+          if (idle && idle !== '00:00:00') {
+            idleStr = idle;
           }
         }
 
@@ -1463,7 +2093,6 @@
       const tables = document.getElementById("allPressesTables");
       const stats = document.getElementById("allPressStats");
       
-      // Show the containers
       stats.style.display = "grid";
       tables.style.display = "grid";
       
@@ -1471,14 +2100,18 @@
       stats.innerHTML = "";
 
       let total = 0, totalDur = 0, below30 = 0, working = 0;
+      let filteredTotal = 0;
+      let totalFiltered = 0;
 
       for (let press = 1; press <= 5; press++) {
-        const data = allData[press] || [];
+        const rawData = allData[press] || [];
+        const data = filterEnabled ? filterData(rawData) : rawData;
         const todayData = todayStatusData[press] || [];
-        total += data.length;
+        total += rawData.length;
+        filteredTotal += data.length;
+        totalFiltered += (rawData.length - data.length);
         
         let pressDur = 0, pressBelow = 0;
-        // Use today's data for working status (real-time)
         const pressWorking = todayData.some(row => !row.endTime || row.endTime.trim() === '');
         
         data.forEach(row => {
@@ -1491,6 +2124,19 @@
         below30 += pressBelow;
         if (pressWorking) working++;
 
+        // Sort data for this press (newest first)
+        const sortedData = [...data].sort((a, b) => {
+          const dateA = parseDate(a.date);
+          const dateB = parseDate(b.date);
+          if (dateA.getTime() !== dateB.getTime()) {
+            return dateB.getTime() - dateA.getTime();
+          }
+          const timeA = a.startTime.split(':').map(Number);
+          const timeB = b.startTime.split(':').map(Number);
+          return (timeB[0] * 3600 + timeB[1] * 60 + timeB[2]) - 
+                 (timeA[0] * 3600 + timeA[1] * 60 + timeA[2]);
+        });
+
         const container = document.createElement("div");
         container.className = "mini-table-container";
         
@@ -1498,11 +2144,15 @@
           <div class="mini-table-header">
             <span class="status-indicator ${pressWorking ? 'status-working' : 'status-idle'}"></span>
             Pre Press - ${press}
+            ${filterEnabled && data.length < rawData.length ? 
+              `<span style="font-size:0.7em; opacity:0.8; margin-left:8px;">
+                (${data.length}/${rawData.length})
+              </span>` : ''}
           </div>
           <table class="mini-table">
             <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr></thead>
             <tbody>
-              ${data.slice(0, 3).map(row => `
+              ${sortedData.slice(0, 3).map(row => `
                 <tr>
                   <td>${row.date}</td>
                   <td>${row.startTime}</td>
@@ -1510,26 +2160,37 @@
                   <td class="duration ${getDurationClass(row.duration)}">${row.duration || "Pressing"}</td>
                 </tr>
               `).join('')}
-              ${data.length > 3 ? `<tr><td colspan="4" class="more-entries" onclick="expandPress(${press})">+${data.length - 3} more</td></tr>` : ''}
-              ${data.length === 0 ? '<tr><td colspan="4" class="no-data-cell" style="text-align:center;padding:20px;">No data</td></tr>' : ''}
+              ${sortedData.length > 3 ? `<tr><td colspan="4" class="more-entries" onclick="expandPress(${press})">+${sortedData.length - 3} more</td></tr>` : ''}
+              ${sortedData.length === 0 ? '<tr><td colspan="4" class="no-data-cell" style="text-align:center;padding:20px;">No data</td></tr>' : ''}
             </tbody>
           </table>
         `;
         tables.appendChild(container);
       }
 
-      const avg = total > 0 ? formatDuration(totalDur / total) : "0:00";
+      const avg = filteredTotal > 0 ? formatDuration(totalDur / filteredTotal) : "0:00";
       
-      document.getElementById("totalPresses").textContent = total;
+      document.getElementById("totalPresses").textContent = filteredTotal;
       document.getElementById("avgDuration").textContent = avg;
       document.getElementById("belowThirty").textContent = below30;
       
       stats.innerHTML = `
-        <div class="all-stat-card"><h4>Total Entries</h4><div class="value">${total}</div></div>
+        <div class="all-stat-card"><h4>Total Entries</h4><div class="value">${filteredTotal}</div></div>
         <div class="all-stat-card"><h4>Avg Duration</h4><div class="value">${avg}</div></div>
         <div class="all-stat-card"><h4>Below 30 Min</h4><div class="value">${below30}</div></div>
         <div class="all-stat-card"><h4>Working</h4><div class="value">${working}/5</div></div>
       `;
+      
+      if (filterEnabled && totalFiltered > 0) {
+        stats.innerHTML += `
+          <div class="all-stat-card filter-status-card">
+            <h4>Filter Status</h4>
+            <div class="value">
+              Hiding &lt;${filterThreshold} min (${totalFiltered} entries filtered)
+            </div>
+          </div>
+        `;
+      }
     }
 
     function expandPress(num) {
@@ -1538,7 +2199,9 @@
     }
 
     function updateStatsForPress(press) {
-      const data = allData[press] || [];
+      const rawData = allData[press] || [];
+      const data = filterEnabled ? filterData(rawData) : rawData;
+      
       let totalDur = 0, below30 = 0;
       
       data.forEach(row => {
@@ -1553,13 +2216,10 @@
     }
 
     function updatePressStatus() {
-      // Use todayStatusData for real-time status indicators (always based on today's data)
       for (let press = 1; press <= 5; press++) {
         const data = todayStatusData[press] || [];
-        // Check if there's any entry with no end time (currently in progress)
         const isWorking = data.some(row => !row.endTime || row.endTime.trim() === '');
         
-        // Update status indicator in press buttons
         const btns = document.querySelectorAll(".press-btn");
         if (btns[press]) {
           const ind = btns[press].querySelector(".status-indicator");
@@ -1569,9 +2229,12 @@
     }
 
     function parseDuration(str) {
-      if (!str) return 0;
+      if (!str || str === "Pressing") return 0;
       const parts = str.split(':');
-      return parts.length === 2 ? parseInt(parts[0]) * 60 + parseInt(parts[1]) : 0;
+      if (parts.length === 2) {
+        return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      }
+      return 0;
     }
 
     function formatDuration(secs) {
@@ -1589,28 +2252,53 @@
     }
 
     function calculateIdleTime(currStart, currDate, prevEnd, prevDate) {
-      if (!prevEnd || !currStart) return null;
+      if (!prevEnd || prevEnd.trim() === '' || !currStart) return null;
       
-      const currParts = currDate.split('/');
-      const prevParts = prevDate.split('/');
-      
-      const curr = new Date(currParts[2], currParts[1] - 1, currParts[0]);
-      const prev = new Date(prevParts[2], prevParts[1] - 1, prevParts[0]);
-      
-      const currTime = currStart.split(':').map(Number);
-      const prevTime = prevEnd.split(':').map(Number);
-      
-      curr.setHours(currTime[0] || 0, currTime[1] || 0, currTime[2] || 0, 0);
-      prev.setHours(prevTime[0] || 0, prevTime[1] || 0, prevTime[2] || 0, 0);
-      
-      const diffSec = Math.floor((curr - prev) / 1000);
-      if (diffSec < 0) return null;
-      
-      const h = Math.floor(diffSec / 3600);
-      const m = Math.floor((diffSec % 3600) / 60);
-      const s = diffSec % 60;
-      
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      try {
+        // Parse dates (DD/MM/YYYY format)
+        const currParts = currDate.split('/');
+        const prevParts = prevDate.split('/');
+        
+        if (currParts.length !== 3 || prevParts.length !== 3) return null;
+        
+        const currDateObj = new Date(
+          parseInt(currParts[2]),
+          parseInt(currParts[1]) - 1,
+          parseInt(currParts[0])
+        );
+        
+        const prevDateObj = new Date(
+          parseInt(prevParts[2]),
+          parseInt(prevParts[1]) - 1,
+          parseInt(prevParts[0])
+        );
+        
+        // Parse times (HH:MM:SS format)
+        const currTime = currStart.split(':').map(Number);
+        const prevTime = prevEnd.split(':').map(Number);
+        
+        if (currTime.length !== 3 || prevTime.length !== 3) return null;
+        
+        // Set times to date objects
+        currDateObj.setHours(currTime[0], currTime[1], currTime[2], 0);
+        prevDateObj.setHours(prevTime[0], prevTime[1], prevTime[2], 0);
+        
+        // Calculate difference in seconds
+        const diffSec = Math.floor((currDateObj - prevDateObj) / 1000);
+        
+        // If negative (shouldn't happen with sorted data), return null
+        if (diffSec < 0) return null;
+        
+        // Format as HH:MM:SS
+        const h = Math.floor(diffSec / 3600);
+        const m = Math.floor((diffSec % 3600) / 60);
+        const s = diffSec % 60;
+        
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      } catch (error) {
+        console.error("Error calculating idle time:", error);
+        return null;
+      }
     }
 
     function exportToExcel() {
@@ -1621,47 +2309,56 @@
       let filename = "";
       
       if (currentPress === "all") {
-        // Export all presses data
         filename = `All_Presses_${fromDate.replace(/\//g, '-')}_to_${toDate.replace(/\//g, '-')}.csv`;
-        csvContent = "Press,Date,Start Time,End Time,Duration\n";
+        csvContent = "Press,Date,Start Time,End Time,Duration,Filtered\n";
         
         for (let press = 1; press <= 5; press++) {
           const data = allData[press] || [];
           data.forEach(row => {
-            csvContent += `Press ${press},${row.date},${row.startTime},${row.endTime || "In Progress"},${row.duration || "Pressing"}\n`;
+            const duration = parseDuration(row.duration);
+            const isFiltered = filterEnabled && row.endTime && row.endTime.trim() !== '' && duration < (filterThreshold * 60);
+            csvContent += `Press ${press},${row.date},${row.startTime},${row.endTime || "In Progress"},${row.duration || "Pressing"},${isFiltered ? "YES" : "NO"}\n`;
           });
         }
       } else {
-        // Export single press data
         filename = `Press_${currentPress}_${fromDate.replace(/\//g, '-')}_to_${toDate.replace(/\//g, '-')}.csv`;
-        csvContent = "Date,Start Time,End Time,Duration,Idle Time\n";
+        csvContent = "Date,Start Time,End Time,Duration,Idle Time,Filtered\n";
         
         const data = allData[currentPress] || [];
-        data.forEach((row, idx) => {
-          let idleStr = '00:00:00';
-          if (idx < data.length - 1) {
-            const prev = data[idx + 1];
-            if (prev.endTime && prev.endTime.trim() !== '' && row.startTime) {
-              const idle = calculateIdleTime(row.startTime, row.date, prev.endTime, prev.date);
-              if (idle) idleStr = idle;
-            }
+        const sortedData = [...data].sort((a, b) => {
+          const dateA = parseDate(a.date);
+          const dateB = parseDate(b.date);
+          if (dateA.getTime() !== dateB.getTime()) {
+            return dateB.getTime() - dateA.getTime();
           }
-          csvContent += `${row.date},${row.startTime},${row.endTime || "In Progress"},${row.duration || "Pressing"},${idleStr}\n`;
+          const timeA = a.startTime.split(':').map(Number);
+          const timeB = b.startTime.split(':').map(Number);
+          return (timeB[0] * 3600 + timeB[1] * 60 + timeB[2]) - 
+                 (timeA[0] * 3600 + timeA[1] * 60 + timeA[2]);
+        });
+        
+        sortedData.forEach((row, idx) => {
+          let idleStr = '00:00:00';
+          if (idx < sortedData.length - 1) {
+            const nextRow = sortedData[idx + 1];
+            const idle = calculateIdleTime(row.startTime, row.date, nextRow.endTime, nextRow.date);
+            if (idle) idleStr = idle;
+          }
+          const duration = parseDuration(row.duration);
+          const isFiltered = filterEnabled && row.endTime && row.endTime.trim() !== '' && duration < (filterThreshold * 60);
+          csvContent += `${row.date},${row.startTime},${row.endTime || "In Progress"},${row.duration || "Pressing"},${idleStr},${isFiltered ? "YES" : "NO"}\n`;
         });
       }
       
-      // Check if there's data to export
       if (csvContent.split('\n').length <= 2) {
         alert("No data available to export.");
         return;
       }
       
-      // Create and download the CSV file
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement("a");
       
       if (navigator.msSaveBlob) {
-        // IE 10+
         navigator.msSaveBlob(blob, filename);
       } else {
         const url = URL.createObjectURL(blob);
