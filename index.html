@@ -6,9 +6,11 @@
   <title>Pre Press Monitoring System</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/themes/material_blue.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <style>
-    /* Add this new CSS for the filter slider */
+    /* Filter Controls - FIXED: Better layout and draggable only on header */
     .filter-controls {
       position: fixed;
       top: 60px;
@@ -16,13 +18,12 @@
       z-index: 1000;
       background: rgba(255, 255, 255, 0.95);
       border-radius: 12px;
-      padding: 10px;
+      padding: 0;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
       backdrop-filter: blur(10px);
       border: 2px solid #667eea;
       transition: all 0.3s ease;
       width: 250px;
-      cursor: move;
       user-select: none;
     }
 
@@ -41,14 +42,17 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 10px;
-      padding-bottom: 8px;
+      margin-bottom: 0;
+      padding: 12px 15px;
       border-bottom: 1px solid #dee2e6;
-      cursor: default;
+      cursor: move;
+      background: rgba(102, 126, 234, 0.1);
+      border-radius: 10px 10px 0 0;
     }
 
     body.dark-mode .filter-header {
       border-bottom-color: #333;
+      background: rgba(212, 175, 55, 0.1);
     }
 
     .filter-header h3 {
@@ -64,6 +68,11 @@
       color: #f0e6d2;
     }
 
+    .filter-content {
+      padding: 15px;
+      cursor: default;
+    }
+
     .filter-toggle {
       display: flex;
       align-items: center;
@@ -72,7 +81,7 @@
       padding: 4px 8px;
       border-radius: 6px;
       transition: background 0.3s ease;
-      margin-bottom: 8px;
+      margin-bottom: 15px;
     }
 
     .filter-toggle:hover {
@@ -103,6 +112,7 @@
       border-radius: 11px;
       transition: all 0.3s ease;
       flex-shrink: 0;
+      cursor: pointer;
     }
 
     .toggle-switch.active {
@@ -136,13 +146,14 @@
     .filter-slider-container {
       display: block;
       margin-top: 8px;
+      cursor: default;
     }
 
     .slider-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 6px;
+      margin-bottom: 10px;
     }
 
     .slider-header label {
@@ -179,7 +190,8 @@
       background: linear-gradient(to right, #11998e, #38ef7d);
       border-radius: 2px;
       outline: none;
-      margin: 5px 0;
+      margin: 10px 0;
+      cursor: pointer;
     }
 
     body.dark-mode .minute-slider {
@@ -189,8 +201,8 @@
     .minute-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       background: white;
       border: 2px solid #11998e;
@@ -210,8 +222,8 @@
     }
 
     .minute-slider::-moz-range-thumb {
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
       background: white;
       border: 2px solid #11998e;
@@ -236,8 +248,8 @@
     }
 
     .filtered-count {
-      margin-top: 8px;
-      padding: 6px;
+      margin-top: 12px;
+      padding: 8px;
       background: rgba(102, 126, 234, 0.1);
       border-radius: 6px;
       text-align: center;
@@ -309,6 +321,7 @@
       justify-content: center;
       border-radius: 4px;
       transition: all 0.2s ease;
+      margin-right: 4px;
     }
 
     .filter-minimize:hover {
@@ -332,6 +345,18 @@
       overflow: hidden;
       border-radius: 20px;
       cursor: pointer;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: 2px solid #667eea;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    body.dark-mode .filter-controls.minimized {
+      background: linear-gradient(135deg, #d4af37 0%, #b8941f 100%);
+      border: 2px solid #d4af37;
+      box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
     }
 
     .filter-controls.minimized .filter-content {
@@ -340,13 +365,32 @@
 
     .filter-controls.minimized .filter-minimize {
       position: absolute;
-      top: 8px;
-      right: 8px;
-      transform: rotate(180deg);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(180deg);
+      color: white;
+      margin: 0;
+    }
+
+    body.dark-mode .filter-controls.minimized .filter-minimize {
+      color: #1a1a1a;
     }
 
     .filter-controls.minimized .filter-header {
       display: none;
+    }
+
+    .filter-controls.minimized .filter-close {
+      display: none;
+    }
+
+    .filter-controls.minimized:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    body.dark-mode .filter-controls.minimized:hover {
+      box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
     }
 
     @keyframes fadeIn {
@@ -359,7 +403,7 @@
       position: fixed;
       top: 10px;
       right: 10px;
-      z-index: 1000;
+      z-index: 1001;
       background: rgba(255, 255, 255, 0.2);
       border-radius: 50%;
       width: 44px;
@@ -402,6 +446,77 @@
       transform: rotate(0deg);
     }
 
+    /* Export dropdown styles */
+    .export-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .export-dropdown-content {
+      display: none;
+      position: absolute;
+      right: 0;
+      background-color: white;
+      min-width: 200px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      z-index: 1000;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 5px;
+    }
+
+    body.dark-mode .export-dropdown-content {
+      background-color: #2a2a2a;
+      border: 1px solid #d4af37;
+    }
+
+    .export-dropdown-content a {
+      color: #495057;
+      padding: 12px 16px;
+      text-decoration: none;
+      display: block;
+      text-align: left;
+      font-size: 0.9em;
+      transition: background 0.3s ease;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    body.dark-mode .export-dropdown-content a {
+      color: #f0e6d2;
+      border-bottom: 1px solid #333;
+    }
+
+    .export-dropdown-content a:last-child {
+      border-bottom: none;
+    }
+
+    .export-dropdown-content a:hover {
+      background-color: #f8f9fa;
+    }
+
+    body.dark-mode .export-dropdown-content a:hover {
+      background-color: #333;
+    }
+
+    .export-dropdown:hover .export-dropdown-content {
+      display: block;
+    }
+
+    .btn-export {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 10px 16px;
+      font-size: 0.85em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .export-icon {
+      width: 16px;
+      height: 16px;
+    }
+
     @media (max-width: 768px) {
       .filter-controls {
         top: 60px;
@@ -410,6 +525,19 @@
         width: auto;
         max-width: 300px;
         margin: 0 auto;
+      }
+      
+      .filter-controls.minimized {
+        top: 60px;
+        right: 10px;
+        left: auto;
+        width: 40px;
+        height: 40px;
+      }
+      
+      .export-dropdown-content {
+        left: 0;
+        right: auto;
       }
     }
 
@@ -761,16 +889,19 @@
       box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
     }
 
-    .btn-export {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 10px 16px;
-      font-size: 0.85em;
+    /* FIXED "In Progress" row styling - soft fade effect */
+    tbody tr.in-progress {
+      background: linear-gradient(90deg, rgba(33, 150, 243, 0.1), rgba(33, 150, 243, 0.2));
+      animation: soft-fade 3s ease-in-out infinite;
     }
 
-    .btn-export:hover, .btn-export:active {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    @keyframes soft-fade {
+      0%, 100% { 
+        background: linear-gradient(90deg, rgba(33, 150, 243, 0.1), rgba(33, 150, 243, 0.15));
+      }
+      50% { 
+        background: linear-gradient(90deg, rgba(33, 150, 243, 0.15), rgba(33, 150, 243, 0.25));
+      }
     }
 
     .press-selector {
@@ -957,16 +1088,6 @@
 
     tbody tr:hover {
       background: rgba(102, 126, 234, 0.05);
-    }
-
-    tbody tr.in-progress {
-      background: rgba(33, 150, 243, 0.15);
-      animation: fade-glow 2.5s ease-in-out infinite;
-    }
-
-    @keyframes fade-glow {
-      0%, 100% { background: rgba(33, 150, 243, 0.15); }
-      50% { background: rgba(33, 150, 243, 0.35); }
     }
 
     tbody tr.success {
@@ -1337,7 +1458,7 @@
 </head>
 <body>
   <!-- Filter Controls -->
-  <div class="filter-controls" id="filterControls">
+  <div class="filter-controls minimized" id="filterControls">
     <div class="filter-header">
       <h3>
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1352,7 +1473,7 @@
     </div>
     
     <div class="filter-content">
-      <div class="filter-toggle" onclick="toggleFilter()">
+      <div class="filter-toggle" id="filterToggleButton">
         <label>Filter Short Durations</label>
         <div class="toggle-switch active" id="filterToggle">
           <div class="toggle-slider"></div>
@@ -1364,8 +1485,7 @@
           <label>Minimum Duration:</label>
           <div class="slider-value" id="sliderValue">6 min</div>
         </div>
-        <input type="range" min="1" max="30" value="6" class="minute-slider" id="durationSlider" 
-               oninput="updateSliderValue(this.value)" onchange="applyFilter()">
+        <input type="range" min="1" max="30" value="6" class="minute-slider" id="durationSlider">
         <div class="slider-info">Hide durations below this threshold</div>
         
         <div class="filtered-count" id="filteredCount">
@@ -1458,7 +1578,22 @@
     <div class="section">
       <div class="section-header">
         <h2 id="pressTitle">All Pre Presses</h2>
-        <button class="btn btn-export" onclick="exportToExcel()">Export</button>
+        <div class="export-dropdown">
+          <button class="btn btn-export">
+            <svg class="export-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export
+          </button>
+          <div class="export-dropdown-content">
+            <a href="#" onclick="exportToCSV()">Export as CSV</a>
+            <a href="#" onclick="exportToPNG()">Export as PNG</a>
+            <a href="#" onclick="exportToPDF()">Export as PDF</a>
+            <a href="#" onclick="exportPreviousDayPDF()">Export Previous Day as PDF</a>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1596,12 +1731,14 @@
     let filterEnabled = true;
     let filterThreshold = 6;
     let filteredCount = 0;
-    let filterMinimized = false;
+    let filterMinimized = true; // Start minimized by default
     
     // Dragging variables
     let isDragging = false;
-    let dragOffsetX = 0;
-    let dragOffsetY = 0;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let initialLeft = 0;
+    let initialTop = 0;
 
     document.addEventListener("DOMContentLoaded", () => {
       updateDateTime();
@@ -1666,15 +1803,8 @@
       document.getElementById("durationSlider").value = filterThreshold;
       updateSliderValue(filterThreshold);
       
-      // Initialize filter toggle
-      document.getElementById("filterToggle").addEventListener("click", toggleFilter);
-      
-      // Initialize minimize/close buttons
-      document.getElementById("filterMinimize").addEventListener("click", toggleMinimize);
-      document.getElementById("filterClose").addEventListener("click", closeFilter);
-      
-      // Initialize dragging
-      initializeDragging();
+      // Initialize filter controls with proper event listeners
+      initializeFilterControls();
       
       initializePressButtons();
       loadData();
@@ -1686,41 +1816,88 @@
       initializeLanternCursor();
     });
 
-    // Dragging functionality
-    function initializeDragging() {
-      const filterControls = document.getElementById('filterControls');
-      const header = filterControls.querySelector('.filter-header');
+    // FIXED: Initialize filter controls with proper event listeners
+    function initializeFilterControls() {
+      const filterToggle = document.getElementById("filterToggle");
+      const filterToggleButton = document.getElementById("filterToggleButton");
+      const durationSlider = document.getElementById("durationSlider");
+      const filterMinimizeBtn = document.getElementById("filterMinimize");
+      const filterCloseBtn = document.getElementById("filterClose");
+      const filterControls = document.getElementById("filterControls");
+      const filterHeader = document.querySelector(".filter-header");
       
-      header.addEventListener('mousedown', startDrag);
-      header.addEventListener('touchstart', startDragTouch);
+      // Toggle filter on switch click
+      filterToggle.addEventListener("click", toggleFilter);
+      filterToggleButton.addEventListener("click", toggleFilter);
       
+      // Slider events
+      durationSlider.addEventListener("input", function() {
+        updateSliderValue(this.value);
+        if (filterEnabled) {
+          applyFilter();
+        }
+      });
+      
+      durationSlider.addEventListener("change", function() {
+        if (filterEnabled) {
+          applyFilter();
+        }
+      });
+      
+      // Minimize/close buttons
+      filterMinimizeBtn.addEventListener("click", toggleMinimize);
+      filterCloseBtn.addEventListener("click", closeFilter);
+      
+      // Initialize dragging on header only
+      initializeDragging(filterControls, filterHeader);
+      
+      // Click to maximize minimized filter
+      filterControls.addEventListener("click", function(e) {
+        if (filterMinimized && !e.target.closest('.filter-minimize') && !e.target.closest('.filter-close')) {
+          toggleMinimize();
+        }
+      });
+    }
+
+    // FIXED: Dragging only on header
+    function initializeDragging(element, handle) {
+      let isDragging = false;
+      let startX, startY, initialLeft, initialTop;
+      
+      handle.addEventListener('mousedown', startDrag);
       document.addEventListener('mousemove', drag);
-      document.addEventListener('touchmove', dragTouch);
       document.addEventListener('mouseup', stopDrag);
+      
+      handle.addEventListener('touchstart', startDragTouch);
+      document.addEventListener('touchmove', dragTouch);
       document.addEventListener('touchend', stopDrag);
       
       function startDrag(e) {
         if (filterMinimized) return;
         isDragging = true;
-        filterControls.classList.add('dragging');
+        element.classList.add('dragging');
         
-        const rect = filterControls.getBoundingClientRect();
-        dragOffsetX = e.clientX - rect.left;
-        dragOffsetY = e.clientY - rect.top;
+        startX = e.clientX;
+        startY = e.clientY;
+        
+        const rect = element.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
         
         e.preventDefault();
       }
       
       function startDragTouch(e) {
-        if (filterMinimized) return;
-        if (e.touches.length !== 1) return;
-        
+        if (filterMinimized || e.touches.length !== 1) return;
         isDragging = true;
-        filterControls.classList.add('dragging');
+        element.classList.add('dragging');
         
-        const rect = filterControls.getBoundingClientRect();
-        dragOffsetX = e.touches[0].clientX - rect.left;
-        dragOffsetY = e.touches[0].clientY - rect.top;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        
+        const rect = element.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
         
         e.preventDefault();
       }
@@ -1728,67 +1905,66 @@
       function drag(e) {
         if (!isDragging) return;
         
-        let x = e.clientX - dragOffsetX;
-        let y = e.clientY - dragOffsetY;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        
+        let newLeft = initialLeft + dx;
+        let newTop = initialTop + dy;
         
         // Keep within viewport bounds
-        const maxX = window.innerWidth - filterControls.offsetWidth;
-        const maxY = window.innerHeight - filterControls.offsetHeight;
+        const maxX = window.innerWidth - element.offsetWidth;
+        const maxY = window.innerHeight - element.offsetHeight;
         
-        x = Math.max(0, Math.min(x, maxX));
-        y = Math.max(0, Math.min(y, maxY));
+        newLeft = Math.max(0, Math.min(newLeft, maxX));
+        newTop = Math.max(0, Math.min(newTop, maxY));
         
-        filterControls.style.left = `${x}px`;
-        filterControls.style.top = `${y}px`;
-        filterControls.style.right = 'auto';
+        element.style.left = `${newLeft}px`;
+        element.style.top = `${newTop}px`;
+        element.style.right = 'auto';
       }
       
       function dragTouch(e) {
-        if (!isDragging) return;
-        if (e.touches.length !== 1) return;
+        if (!isDragging || e.touches.length !== 1) return;
         
-        let x = e.touches[0].clientX - dragOffsetX;
-        let y = e.touches[0].clientY - dragOffsetY;
+        const dx = e.touches[0].clientX - startX;
+        const dy = e.touches[0].clientY - startY;
         
-        const maxX = window.innerWidth - filterControls.offsetWidth;
-        const maxY = window.innerHeight - filterControls.offsetHeight;
+        let newLeft = initialLeft + dx;
+        let newTop = initialTop + dy;
         
-        x = Math.max(0, Math.min(x, maxX));
-        y = Math.max(0, Math.min(y, maxY));
+        const maxX = window.innerWidth - element.offsetWidth;
+        const maxY = window.innerHeight - element.offsetHeight;
         
-        filterControls.style.left = `${x}px`;
-        filterControls.style.top = `${y}px`;
-        filterControls.style.right = 'auto';
+        newLeft = Math.max(0, Math.min(newLeft, maxX));
+        newTop = Math.max(0, Math.min(newTop, maxY));
+        
+        element.style.left = `${newLeft}px`;
+        element.style.top = `${newTop}px`;
+        element.style.right = 'auto';
         
         e.preventDefault();
       }
       
       function stopDrag() {
         isDragging = false;
-        filterControls.classList.remove('dragging');
+        element.classList.remove('dragging');
       }
     }
 
     function toggleMinimize() {
       const filterControls = document.getElementById('filterControls');
+      const minimizeBtn = document.getElementById('filterMinimize');
+      
       filterMinimized = !filterMinimized;
       
       if (filterMinimized) {
         filterControls.classList.add('minimized');
-        filterControls.style.width = '40px';
-        filterControls.style.height = '40px';
-        filterControls.style.cursor = 'pointer';
-        filterControls.onclick = function(e) {
-          if (filterMinimized && !e.target.closest('.filter-minimize')) {
-            toggleMinimize();
-          }
-        };
+        minimizeBtn.innerHTML = '+';
+        minimizeBtn.title = 'Maximize';
       } else {
         filterControls.classList.remove('minimized');
-        filterControls.style.width = '250px';
-        filterControls.style.height = 'auto';
-        filterControls.style.cursor = 'move';
-        filterControls.onclick = null;
+        minimizeBtn.innerHTML = '−';
+        minimizeBtn.title = 'Minimize';
       }
     }
 
@@ -1818,10 +1994,6 @@
     function updateSliderValue(value) {
       filterThreshold = parseInt(value);
       document.getElementById("sliderValue").textContent = `${value} min`;
-      
-      if (filterEnabled) {
-        applyFilter();
-      }
     }
 
     function applyFilter() {
@@ -1841,8 +2013,13 @@
       filteredCount = 0;
       
       const filteredData = data.filter(row => {
+        // Don't filter "In Progress" rows
+        if (!row.endTime || row.endTime.trim() === '') {
+          return true;
+        }
+        
         const duration = parseDuration(row.duration);
-        if (!row.endTime || row.endTime.trim() === '' || duration >= thresholdSeconds) {
+        if (duration >= thresholdSeconds) {
           return true;
         } else {
           filteredCount++;
@@ -1862,6 +2039,314 @@
       }
       
       return filteredData;
+    }
+
+    // FIXED: Calculate "Below 30 min" count properly (counting yellow and red highlights)
+    function calculateBelowThirty(data) {
+      let below30 = 0;
+      
+      data.forEach(row => {
+        // Skip "In Progress" rows
+        if (!row.endTime || row.endTime.trim() === '') return;
+        
+        const duration = parseDuration(row.duration);
+        // Count rows that are below 28 minutes (with 2 minute margin)
+        if (duration < 28 * 60) {
+          below30++;
+        }
+      });
+      
+      return below30;
+    }
+
+    // Helper function to format date as "12th Dec 2025"
+    function formatDateForFilename(dateStr) {
+      const parts = dateStr.split('/');
+      if (parts.length !== 3) return dateStr;
+      
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const year = parts[2];
+      
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const monthName = monthNames[month - 1];
+      
+      // Add ordinal suffix
+      let dayWithSuffix;
+      if (day === 1 || day === 21 || day === 31) {
+        dayWithSuffix = day + "st";
+      } else if (day === 2 || day === 22) {
+        dayWithSuffix = day + "nd";
+      } else if (day === 3 || day === 23) {
+        dayWithSuffix = day + "rd";
+      } else {
+        dayWithSuffix = day + "th";
+      }
+      
+      return `${dayWithSuffix} ${monthName} ${year}`;
+    }
+
+    // Helper function to get previous day date
+    function getPreviousDayDate() {
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      
+      const day = String(yesterday.getDate()).padStart(2, '0');
+      const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+      const year = yesterday.getFullYear();
+      
+      return `${day}/${month}/${year}`;
+    }
+
+    // NEW: Export Previous Day as PDF
+    async function exportPreviousDayPDF() {
+      try {
+        const yesterday = getPreviousDayDate();
+        
+        // Set the date pickers to yesterday
+        fromDatePicker.setDate(yesterday);
+        toDatePicker.setDate(yesterday);
+        
+        // Show loading
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.style.position = 'fixed';
+        loadingOverlay.style.top = '0';
+        loadingOverlay.style.left = '0';
+        loadingOverlay.style.width = '100%';
+        loadingOverlay.style.height = '100%';
+        loadingOverlay.style.background = 'rgba(0,0,0,0.7)';
+        loadingOverlay.style.color = 'white';
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.flexDirection = 'column';
+        loadingOverlay.style.alignItems = 'center';
+        loadingOverlay.style.justifyContent = 'center';
+        loadingOverlay.style.zIndex = '10000';
+        loadingOverlay.innerHTML = `
+          <div class="spinner"></div>
+          <p style="margin-top: 20px; font-size: 1.2em;">Loading previous day's data...</p>
+          <p style="margin-top: 10px; font-size: 0.9em;">This may take a moment</p>
+        `;
+        document.body.appendChild(loadingOverlay);
+        
+        // Load data for yesterday
+        await loadData();
+        
+        // Wait for data to load
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Remove loading overlay
+        document.body.removeChild(loadingOverlay);
+        
+        // Export PDF
+        await exportToPDF();
+        
+      } catch (error) {
+        console.error("Error exporting previous day PDF:", error);
+        alert("Error exporting previous day data. Please try again.");
+      }
+    }
+
+    // Updated PDF export function with proper naming
+    async function exportToPDF() {
+      try {
+        const { jsPDF } = window.jspdf;
+        const fromDate = document.getElementById("fromDate").value;
+        const toDate = document.getElementById("toDate").value;
+        
+        // Generate filename based on date range
+        let filename;
+        if (fromDate === toDate) {
+          // Single day
+          filename = `Prepress time monitoring ${formatDateForFilename(fromDate)}.pdf`;
+        } else {
+          // Date range
+          const fromFormatted = formatDateForFilename(fromDate);
+          const toFormatted = formatDateForFilename(toDate);
+          // Extract year from toDate for consistent naming
+          const parts = toDate.split('/');
+          const year = parts[2];
+          filename = `Prepress time monitoring ${fromFormatted.split(' ')[0]} ${fromFormatted.split(' ')[1]} - ${toFormatted.split(' ')[0]} ${toFormatted.split(' ')[1]} ${year}.pdf`;
+        }
+        
+        // Create loading indicator
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.style.position = 'fixed';
+        loadingOverlay.style.top = '0';
+        loadingOverlay.style.left = '0';
+        loadingOverlay.style.width = '100%';
+        loadingOverlay.style.height = '100%';
+        loadingOverlay.style.background = 'rgba(0,0,0,0.7)';
+        loadingOverlay.style.color = 'white';
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.flexDirection = 'column';
+        loadingOverlay.style.alignItems = 'center';
+        loadingOverlay.style.justifyContent = 'center';
+        loadingOverlay.style.zIndex = '10000';
+        loadingOverlay.innerHTML = `
+          <div class="spinner"></div>
+          <p style="margin-top: 20px; font-size: 1.2em;">Generating PDF...</p>
+          <p style="margin-top: 10px; font-size: 0.9em;">This may take a moment</p>
+        `;
+        document.body.appendChild(loadingOverlay);
+        
+        // Create PDF - REMOVED COVER PAGE
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        
+        // Save current state
+        const originalCurrentPress = currentPress;
+        
+        // Add All Presses view (FIRST PAGE - no cover page)
+        selectPress("all");
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const allPressesCanvas = await html2canvas(document.querySelector('.container'), {
+          scale: 1.5,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false
+        });
+        
+        const allPressesImg = allPressesCanvas.toDataURL('image/jpeg', 0.9);
+        pdf.addImage(allPressesImg, 'JPEG', 10, 10, pageWidth - 20, pageHeight - 20);
+        
+        // Add individual press views
+        for (let press = 1; press <= 5; press++) {
+          selectPress(press);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const pressCanvas = await html2canvas(document.querySelector('.container'), {
+            scale: 1.5,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false
+          });
+          
+          const pressImg = pressCanvas.toDataURL('image/jpeg', 0.9);
+          pdf.addPage();
+          pdf.addImage(pressImg, 'JPEG', 10, 10, pageWidth - 20, pageHeight - 20);
+        }
+        
+        // Restore original state
+        if (originalCurrentPress === "all") {
+          selectPress("all");
+        } else {
+          selectPress(originalCurrentPress);
+        }
+        
+        // Remove loading overlay
+        document.body.removeChild(loadingOverlay);
+        
+        // Save PDF with proper filename
+        pdf.save(filename);
+        
+      } catch (error) {
+        console.error("Error exporting PDF:", error);
+        alert("Error generating PDF. Please try again.");
+      }
+    }
+
+    // NEW EXPORT FUNCTIONS
+    async function exportToCSV() {
+      exportToExcel(); // Reuse the existing CSV export function
+    }
+
+    async function exportToPNG() {
+      try {
+        const fromDate = document.getElementById("fromDate").value;
+        const toDate = document.getElementById("toDate").value;
+        
+        // Create a zip file for multiple screenshots
+        const screenshots = [];
+        
+        // Save current state
+        const originalCurrentPress = currentPress;
+        const originalDisplay = {
+          allPresses: document.getElementById("allPressesContainer").style.display,
+          singlePress: document.getElementById("singlePressContainer").style.display
+        };
+        
+        // Create loading indicator
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.style.position = 'fixed';
+        loadingOverlay.style.top = '0';
+        loadingOverlay.style.left = '0';
+        loadingOverlay.style.width = '100%';
+        loadingOverlay.style.height = '100%';
+        loadingOverlay.style.background = 'rgba(0,0,0,0.7)';
+        loadingOverlay.style.color = 'white';
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.flexDirection = 'column';
+        loadingOverlay.style.alignItems = 'center';
+        loadingOverlay.style.justifyContent = 'center';
+        loadingOverlay.style.zIndex = '10000';
+        loadingOverlay.innerHTML = `
+          <div class="spinner"></div>
+          <p style="margin-top: 20px; font-size: 1.2em;">Capturing screenshots...</p>
+          <p style="margin-top: 10px; font-size: 0.9em;">This may take a moment</p>
+        `;
+        document.body.appendChild(loadingOverlay);
+        
+        // Capture all screens
+        const dateRange = `${fromDate.replace(/\//g, '-')}_to_${toDate.replace(/\//g, '-')}`;
+        
+        // Capture All Presses view
+        selectPress("all");
+        await new Promise(resolve => setTimeout(resolve, 500)); // Wait for render
+        
+        const allPressesCanvas = await html2canvas(document.querySelector('.container'), {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: darkMode ? '#0a0a0a' : '#ffffff'
+        });
+        
+        // Capture individual press views
+        for (let press = 1; press <= 5; press++) {
+          selectPress(press);
+          await new Promise(resolve => setTimeout(resolve, 500)); // Wait for render
+          
+          const pressCanvas = await html2canvas(document.querySelector('.container'), {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: darkMode ? '#0a0a0a' : '#ffffff'
+          });
+          
+          screenshots.push({
+            name: `Press_${press}_${dateRange}.png`,
+            canvas: pressCanvas
+          });
+        }
+        
+        // Restore original state
+        if (originalCurrentPress === "all") {
+          selectPress("all");
+        } else {
+          selectPress(originalCurrentPress);
+        }
+        
+        // Remove loading overlay
+        document.body.removeChild(loadingOverlay);
+        
+        // Download all screenshots
+        screenshots.forEach((screenshot, index) => {
+          const link = document.createElement('a');
+          link.download = screenshot.name;
+          link.href = screenshot.canvas.toDataURL('image/png');
+          link.click();
+        });
+        
+        // Also download the "All" view
+        const allLink = document.createElement('a');
+        allLink.download = `All_Presses_${dateRange}.png`;
+        allLink.href = allPressesCanvas.toDataURL('image/png');
+        allLink.click();
+        
+      } catch (error) {
+        console.error("Error exporting PNG:", error);
+        alert("Error capturing screenshots. Please try again.");
+      }
     }
 
     async function loadTodayStatusData() {
@@ -1918,7 +2403,7 @@
 
       const allBtn = document.createElement("button");
       allBtn.className = "press-btn active";
-      allBtn.innerHTML = `<span class="status-indicator status-working"></span>All`;
+      allBtn.innerHTML = `<span class="status-indicator status-idle"></span>All`;
       allBtn.onclick = () => selectPress("all");
       container.appendChild(allBtn);
 
@@ -2006,6 +2491,12 @@
         console.error("Error loading data:", error);
         document.getElementById("loadingContainer").style.display = "none";
         document.getElementById("noDataContainer").style.display = "block";
+        
+        // Show 0 in all KPI cards when no data
+        document.getElementById("totalPresses").textContent = "0";
+        document.getElementById("avgDuration").textContent = "0:00";
+        document.getElementById("belowThirty").textContent = "0";
+        
         document.getElementById("allPressLoadingContainer").style.display = "none";
         document.getElementById("allPressStats").style.display = "grid";
         document.getElementById("allPressesTables").style.display = "grid";
@@ -2026,7 +2517,7 @@
 
     function displaySinglePress(press) {
       const rawData = allData[press] || [];
-      const data = filterEnabled ? filterData(rawData) : rawData;
+      const data = filterData(rawData);
       const tbody = document.getElementById("tableBody");
       tbody.innerHTML = "";
 
@@ -2034,6 +2525,11 @@
         document.getElementById("loadingContainer").style.display = "none";
         document.getElementById("dataTable").style.display = "none";
         document.getElementById("noDataContainer").style.display = "block";
+        
+        // Show 0 in all KPI cards when no data
+        document.getElementById("totalPresses").textContent = "0";
+        document.getElementById("avgDuration").textContent = "0:00";
+        document.getElementById("belowThirty").textContent = "0";
         return;
       }
 
@@ -2072,11 +2568,15 @@
           }
         }
 
+        // FIX: "In Progress" label moved to Duration column
+        const durationText = !row.endTime || row.endTime.trim() === '' ? "In Progress" : row.duration;
+        const endTimeText = row.endTime || "";
+        
         tr.innerHTML = `
           <td>${row.date}</td>
           <td>${row.startTime}</td>
-          <td>${row.endTime || "In Progress"}</td>
-          <td class="duration ${getDurationClass(row.duration)}">${row.duration || "Pressing"}</td>
+          <td>${endTimeText}</td>
+          <td class="duration ${getDurationClass(row.duration)}">${durationText}</td>
           <td class="idle-time">${idleStr}</td>
         `;
         tbody.appendChild(tr);
@@ -2099,25 +2599,30 @@
       tables.innerHTML = "";
       stats.innerHTML = "";
 
-      let total = 0, totalDur = 0, below30 = 0, working = 0;
+      let totalCompleted = 0, totalDur = 0, below30 = 0, working = 0;
       let filteredTotal = 0;
       let totalFiltered = 0;
 
       for (let press = 1; press <= 5; press++) {
         const rawData = allData[press] || [];
-        const data = filterEnabled ? filterData(rawData) : rawData;
+        // Exclude "In Progress" from total count
+        const completedData = rawData.filter(row => row.endTime && row.endTime.trim() !== '');
+        const data = filterData(completedData);
         const todayData = todayStatusData[press] || [];
-        total += rawData.length;
+        
+        totalCompleted += completedData.length;
         filteredTotal += data.length;
-        totalFiltered += (rawData.length - data.length);
+        totalFiltered += (completedData.length - data.length);
         
         let pressDur = 0, pressBelow = 0;
         const pressWorking = todayData.some(row => !row.endTime || row.endTime.trim() === '');
         
+        // FIXED: Use calculateBelowThirty function for accurate counting
+        pressBelow = calculateBelowThirty(data);
+        
         data.forEach(row => {
           const dur = parseDuration(row.duration);
           pressDur += dur;
-          if (dur < 30 * 60) pressBelow++;
         });
         
         totalDur += pressDur;
@@ -2144,22 +2649,25 @@
           <div class="mini-table-header">
             <span class="status-indicator ${pressWorking ? 'status-working' : 'status-idle'}"></span>
             Pre Press - ${press}
-            ${filterEnabled && data.length < rawData.length ? 
+            ${filterEnabled && data.length < completedData.length ? 
               `<span style="font-size:0.7em; opacity:0.8; margin-left:8px;">
-                (${data.length}/${rawData.length})
+                (${data.length}/${completedData.length})
               </span>` : ''}
           </div>
           <table class="mini-table">
             <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr></thead>
             <tbody>
-              ${sortedData.slice(0, 3).map(row => `
+              ${sortedData.slice(0, 3).map(row => {
+                const durationText = !row.endTime || row.endTime.trim() === '' ? "In Progress" : row.duration;
+                const endTimeText = row.endTime || "";
+                return `
                 <tr>
                   <td>${row.date}</td>
                   <td>${row.startTime}</td>
-                  <td>${row.endTime || "In Progress"}</td>
-                  <td class="duration ${getDurationClass(row.duration)}">${row.duration || "Pressing"}</td>
+                  <td>${endTimeText}</td>
+                  <td class="duration ${getDurationClass(row.duration)}">${durationText}</td>
                 </tr>
-              `).join('')}
+              `}).join('')}
               ${sortedData.length > 3 ? `<tr><td colspan="4" class="more-entries" onclick="expandPress(${press})">+${sortedData.length - 3} more</td></tr>` : ''}
               ${sortedData.length === 0 ? '<tr><td colspan="4" class="no-data-cell" style="text-align:center;padding:20px;">No data</td></tr>' : ''}
             </tbody>
@@ -2170,6 +2678,7 @@
 
       const avg = filteredTotal > 0 ? formatDuration(totalDur / filteredTotal) : "0:00";
       
+      // FIXED: Update KPI cards with correct below30 count
       document.getElementById("totalPresses").textContent = filteredTotal;
       document.getElementById("avgDuration").textContent = avg;
       document.getElementById("belowThirty").textContent = below30;
@@ -2200,15 +2709,20 @@
 
     function updateStatsForPress(press) {
       const rawData = allData[press] || [];
-      const data = filterEnabled ? filterData(rawData) : rawData;
+      // Exclude "In Progress" from calculations
+      const completedData = rawData.filter(row => row.endTime && row.endTime.trim() !== '');
+      const data = filterData(completedData);
       
-      let totalDur = 0, below30 = 0;
+      let totalDur = 0;
+      let below30 = 0;
       
       data.forEach(row => {
         const dur = parseDuration(row.duration);
         totalDur += dur;
-        if (dur < 30 * 60) below30++;
       });
+      
+      // FIXED: Use calculateBelowThirty function
+      below30 = calculateBelowThirty(data);
       
       document.getElementById("totalPresses").textContent = data.length;
       document.getElementById("avgDuration").textContent = data.length > 0 ? formatDuration(totalDur / data.length) : "0:00";
@@ -2216,6 +2730,8 @@
     }
 
     function updatePressStatus() {
+      let allWorking = true;
+      
       for (let press = 1; press <= 5; press++) {
         const data = todayStatusData[press] || [];
         const isWorking = data.some(row => !row.endTime || row.endTime.trim() === '');
@@ -2225,11 +2741,23 @@
           const ind = btns[press].querySelector(".status-indicator");
           if (ind) ind.className = `status-indicator ${isWorking ? 'status-working' : 'status-idle'}`;
         }
+        
+        // All button is green only if ALL presses are in progress
+        if (!isWorking) {
+          allWorking = false;
+        }
+      }
+      
+      // Update All button status
+      const allBtn = document.querySelector(".press-btn");
+      if (allBtn) {
+        const ind = allBtn.querySelector(".status-indicator");
+        if (ind) ind.className = `status-indicator ${allWorking ? 'status-working' : 'status-idle'}`;
       }
     }
 
     function parseDuration(str) {
-      if (!str || str === "Pressing") return 0;
+      if (!str || str === "Pressing" || str === "In Progress") return 0;
       const parts = str.split(':');
       if (parts.length === 2) {
         return parseInt(parts[0]) * 60 + parseInt(parts[1]);
@@ -2244,8 +2772,8 @@
     }
 
     function getDurationClass(str) {
+      if (!str || str === "Pressing" || str === "In Progress") return "in-progress";
       const dur = parseDuration(str);
-      if (!str || str === "Pressing") return "in-progress";
       if (dur >= 28 * 60) return "success";
       if (dur >= 25 * 60) return "warning";
       return "danger";
@@ -2310,19 +2838,21 @@
       
       if (currentPress === "all") {
         filename = `All_Presses_${fromDate.replace(/\//g, '-')}_to_${toDate.replace(/\//g, '-')}.csv`;
-        csvContent = "Press,Date,Start Time,End Time,Duration,Filtered\n";
+        csvContent = "Press,Date,Start Time,End Time,Duration,Status,Filtered\n";
         
         for (let press = 1; press <= 5; press++) {
           const data = allData[press] || [];
           data.forEach(row => {
             const duration = parseDuration(row.duration);
-            const isFiltered = filterEnabled && row.endTime && row.endTime.trim() !== '' && duration < (filterThreshold * 60);
-            csvContent += `Press ${press},${row.date},${row.startTime},${row.endTime || "In Progress"},${row.duration || "Pressing"},${isFiltered ? "YES" : "NO"}\n`;
+            const isInProgress = !row.endTime || row.endTime.trim() === '';
+            const isFiltered = filterEnabled && !isInProgress && duration < (filterThreshold * 60);
+            const status = isInProgress ? "In Progress" : "Completed";
+            csvContent += `Press ${press},${row.date},${row.startTime},${row.endTime || ""},${isInProgress ? "In Progress" : row.duration},${status},${isFiltered ? "YES" : "NO"}\n`;
           });
         }
       } else {
         filename = `Press_${currentPress}_${fromDate.replace(/\//g, '-')}_to_${toDate.replace(/\//g, '-')}.csv`;
-        csvContent = "Date,Start Time,End Time,Duration,Idle Time,Filtered\n";
+        csvContent = "Date,Start Time,End Time,Duration,Idle Time,Status,Filtered\n";
         
         const data = allData[currentPress] || [];
         const sortedData = [...data].sort((a, b) => {
@@ -2345,8 +2875,11 @@
             if (idle) idleStr = idle;
           }
           const duration = parseDuration(row.duration);
-          const isFiltered = filterEnabled && row.endTime && row.endTime.trim() !== '' && duration < (filterThreshold * 60);
-          csvContent += `${row.date},${row.startTime},${row.endTime || "In Progress"},${row.duration || "Pressing"},${idleStr},${isFiltered ? "YES" : "NO"}\n`;
+          const isInProgress = !row.endTime || row.endTime.trim() === '';
+          const isFiltered = filterEnabled && !isInProgress && duration < (filterThreshold * 60);
+          const status = isInProgress ? "In Progress" : "Completed";
+          const durationText = isInProgress ? "In Progress" : row.duration;
+          csvContent += `${row.date},${row.startTime},${row.endTime || ""},${durationText},${idleStr},${status},${isFiltered ? "YES" : "NO"}\n`;
         });
       }
       
