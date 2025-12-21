@@ -1,0 +1,957 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <EEPROM.h>
+#include <time.h>
+#include <WiFiClientSecure.h>
+
+// WiFi credentials
+const char* ssid = "PlyLab";
+const char* password = "sharon123#@";
+
+// Google Script URL
+const char* scriptURL = "https://script.google.com/macros/s/AKfycbwckYvnhQjL0Wx2Sb5T9yVhNtZSjcWxzlWdV251lCgL7lQ6ffzWaw1cujBIMnIM0-wp/exec";
+
+// Pins for presses
+const int switchPins[5] = {5, 4, 14, 12, 13};
+
+// Timing - CRITICAL PARAMETERS
+const unsigned long PRESS_START_DEBOUNCE = 2000;      // 2 seconds to confirm press start
+const unsigned long PRESS_END_DEBOUNCE = 500;         // 0.5 seconds to confirm press end
+const unsigned long ACTIVE_MONITORING_INTERVAL = 1000; // Check every 1 second when press is active
+const unsigned long BATCH_SEND_INTERVAL = 10000;      // Send batch updates every 10 seconds
+const unsigned long MAX_EXPECTED_DURATION = 2100;     // 35 minutes in seconds (with buffer)
+const unsigned long CRITICAL_CHECK_THRESHOLD = 1500;  // 25 minutes - start intensive monitoring
+const int timezone = 19800;                           // IST +5:30
+
+// Multi-level verification system
+const int VERIFICATION_QUICK_SAMPLES = 5;
+const int VERIFICATION_QUICK_DELAY = 100;
+const int VERIFICATION_THOROUGH_SAMPLES = 20;
+const int VERIFICATION_THOROUGH_DELAY = 100;
+
+// Communication Error Handling Parameters
+const int MAX_HTTP_ERROR_COUNT = 3;          // Reboot after 3 consecutive HTTP errors
+const unsigned long MAX_WIFI_DISCONNECT_TIME = 30000; // 30 seconds max WiFi disconnect
+const int MAX_WIFI_CONNECT_ATTEMPTS = 2;     // Max WiFi connection attempts before reboot
+const int MAX_COMM_ERROR_RESET_COUNT = 5;    // Max communication errors before reboot
+const unsigned long COMM_ERROR_WINDOW = 60000; // 60-second window for error counting
+
+// Structure for each press
+struct PressData {
+  unsigned long startMillis;
+  unsigned long startEpoch;
+  unsigned long lastStateChangeTime;
+  unsigned long lastMonitorTime;
+  unsigned long lastUpdateTime;           // Last time duration was updated
+  
+  bool physicalState;           // Current physical GPIO state
+  bool logicalState;            // Debounced logical state (what we act on)
+  bool isPressed;               // Is press currently active
+  bool dataSent;                // Has final data been sent
+  bool needsImmediateSend;      // Flag for immediate transmission (start/end events)
+  bool isCompleteEvent;         // TRUE only for completion events
+  bool hasEndTime;              // Track if end time has been recorded
+  
+  int consecutiveHighReadings;  // Counter for HIGH readings
+  int consecutiveLowReadings;   // Counter for LOW readings
+  
+  char startDate[12];
+  char startTimeStr[10];
+  char endDate[12];
+  char endTimeStr[10];
+  
+  int eepromAddr;
+  
+  // Watchdog system
+  unsigned long lastSuccessfulReadTime;
+  int missedReadings;
+};
+
+PressData presses[5];
+unsigned long lastBatchSendTime = 0;
+bool wifiConnected = false;
+
+// Communication Error Tracking Variables
+int httpErrorCount = 0;                     // Consecutive HTTP errors
+unsigned long lastWifiConnectedTime = 0;    // Last time WiFi was connected
+int wifiConnectAttempts = 0;                // Current WiFi connection attempts
+int totalCommErrors = 0;                    // Total communication errors of any type
+unsigned long firstCommErrorTime = 0;       // Time of first communication error in current window
+bool isRebooting = false;                   // Flag to prevent multiple reboot calls
+
+// ---------- Function Declarations ----------
+void connectWiFi();
+void testConnection();
+void monitorPress(int index);
+int readPinWithVerification(int pin, int samples, int delayMs);
+bool verifyPressRelease(int index);
+void endPress(int index, const char* reason);
+void sendBatchUpdate(bool forceAll = false);
+void saveToEEPROM(int index);
+void clearEEPROM(int index);
+void recoverFromPowerLoss();
+void getDateTime(char* dateStr, char* timeStr);
+bool isTimeValid();
+void watchdogCheck(int index);
+void updatePressDuration(int index);
+void recordEndTime(int index);
+void checkCommunicationHealth(); // NEW: Communication health checker
+void trackCommunicationError();  // NEW: Track any communication error
+void resetErrorCounters();       // NEW: Reset error counters on success
+void emergencyReboot(const char* reason); // NEW: Emergency reboot function
+
+// ---------- SETUP ----------
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("\n\n╔════════════════════════════════════════════════════════╗");
+  Serial.println("║   Century Plywood Press Monitor - FIXED EDITION       ║");
+  Serial.println("║              DATA INTEGRITY GUARANTEED                ║");
+  Serial.println("║          AUTO-REBOOT ON COMMUNICATION FAILURE         ║");
+  Serial.println("╚════════════════════════════════════════════════════════╝\n");
+
+  EEPROM.begin(512);
+
+  // Initialize communication error tracking
+  httpErrorCount = 0;
+  lastWifiConnectedTime = millis();
+  wifiConnectAttempts = 0;
+  totalCommErrors = 0;
+  firstCommErrorTime = 0;
+  isRebooting = false;
+
+  // Initialize all press data structures
+  for (int i = 0; i < 5; i++) {
+    pinMode(switchPins[i], INPUT_PULLUP);
+    presses[i].eepromAddr = i * 60;
+    presses[i].physicalState = HIGH;
+    presses[i].logicalState = HIGH;
+    presses[i].isPressed = false;
+    presses[i].dataSent = false;
+    presses[i].needsImmediateSend = false;
+    presses[i].isCompleteEvent = false;
+    presses[i].hasEndTime = false;
+    presses[i].lastStateChangeTime = 0;
+    presses[i].lastMonitorTime = 0;
+    presses[i].lastUpdateTime = 0;
+    presses[i].startMillis = 0;
+    presses[i].startEpoch = 0;
+    presses[i].consecutiveHighReadings = 0;
+    presses[i].consecutiveLowReadings = 0;
+    presses[i].lastSuccessfulReadTime = 0;
+    presses[i].missedReadings = 0;
+    presses[i].startDate[0] = '\0';
+    presses[i].startTimeStr[0] = '\0';
+    presses[i].endDate[0] = '\0';
+    presses[i].endTimeStr[0] = '\0';
+  }
+
+  connectWiFi();
+
+  // Configure time with retry mechanism
+  Serial.println("⏰ Syncing time with NTP servers...");
+  configTime(timezone, 0, "pool.ntp.org", "time.nist.gov");
+  int timeAttempts = 0;
+  while (time(nullptr) < 100000 && timeAttempts < 50) {
+    delay(500);
+    Serial.print(".");
+    timeAttempts++;
+  }
+  
+  if (time(nullptr) >= 100000) {
+    Serial.println("\n✅ Time synced successfully!");
+    time_t now = time(nullptr);
+    Serial.printf("Current epoch: %lu\n", now);
+    resetErrorCounters(); // Reset on successful time sync
+  } else {
+    Serial.println("\n❌ Time sync failed - will retry during operation");
+    trackCommunicationError(); // Count time sync as communication error
+  }
+
+  testConnection();
+  recoverFromPowerLoss();
+
+  Serial.println("\n✅ System Ready - Monitoring all presses");
+  Serial.println("⚠️  Auto-reboot enabled for communication failures");
+  Serial.println("═══════════════════════════════════════════════════════\n");
+}
+
+// ---------- MAIN LOOP ----------
+void loop() {
+  // Check communication health before anything else
+  checkCommunicationHealth();
+  
+  // WiFi health check
+  if (WiFi.status() != WL_CONNECTED) {
+    if (wifiConnected) {
+      Serial.println("⚠️ WiFi disconnected! Reconnecting...");
+      wifiConnected = false;
+      trackCommunicationError(); // Count WiFi disconnect as error
+    }
+    connectWiFi();
+  } else {
+    wifiConnected = true;
+    lastWifiConnectedTime = millis();
+  }
+
+  unsigned long currentMillis = millis();
+  unsigned long currentEpoch = time(nullptr);
+
+  // Monitor all presses
+  for (int i = 0; i < 5; i++) {
+    monitorPress(i);
+    
+    // Update duration for active presses periodically
+    if (presses[i].isPressed) {
+      updatePressDuration(i);
+      watchdogCheck(i);
+    }
+  }
+
+  // Check if any press needs immediate send (start/end event)
+  bool hasImmediateSend = false;
+  for (int i = 0; i < 5; i++) {
+    if (presses[i].needsImmediateSend) {
+      hasImmediateSend = true;
+      break;
+    }
+  }
+
+  // Send immediately if there's a start/end event, otherwise send on interval
+  if (hasImmediateSend) {
+    Serial.println("\n🚀 Immediate send triggered (start/end event)");
+    sendBatchUpdate(false);
+    lastBatchSendTime = currentMillis;
+  } else if (currentMillis - lastBatchSendTime >= BATCH_SEND_INTERVAL) {
+    // Periodic batch update for active presses
+    sendBatchUpdate(false);
+    lastBatchSendTime = currentMillis;
+  }
+
+  delay(50); // Small delay to prevent overwhelming the system
+}
+
+// ---------- CORE MONITORING FUNCTION ----------
+void monitorPress(int index) {
+  unsigned long currentMillis = millis();
+  unsigned long currentEpoch = time(nullptr);
+  
+  // Read current physical state
+  int rawReading = digitalRead(switchPins[index]);
+  presses[index].physicalState = rawReading;
+  presses[index].lastSuccessfulReadTime = currentMillis;
+
+  // === STATE MACHINE: NOT PRESSED ===
+  if (!presses[index].isPressed) {
+    if (rawReading == LOW) {
+      presses[index].consecutiveLowReadings++;
+      presses[index].consecutiveHighReadings = 0;
+      
+      // Need consistent LOW readings to start press
+      if (presses[index].consecutiveLowReadings == 1) {
+        presses[index].lastStateChangeTime = currentMillis;
+      }
+      
+      unsigned long timeLow = currentMillis - presses[index].lastStateChangeTime;
+      
+      if (timeLow >= PRESS_START_DEBOUNCE) {
+        // PRESS START CONFIRMED
+        if (!isTimeValid()) {
+          Serial.println("⚠️ Time not synced, resyncing...");
+          configTime(timezone, 0, "pool.ntp.org", "time.nist.gov");
+          delay(2000);
+        }
+        
+        presses[index].startMillis = currentMillis;
+        presses[index].startEpoch = time(nullptr);
+        presses[index].isPressed = true;
+        presses[index].dataSent = false;
+        presses[index].isCompleteEvent = false;  // Start event, not completion
+        presses[index].hasEndTime = false;       // No end time yet
+        presses[index].needsImmediateSend = true; // Flag for immediate send
+        presses[index].logicalState = LOW;
+        presses[index].lastMonitorTime = currentMillis;
+        presses[index].lastUpdateTime = currentMillis;
+        getDateTime(presses[index].startDate, presses[index].startTimeStr);
+        
+        // Clear end time fields for new cycle
+        presses[index].endDate[0] = '\0';
+        presses[index].endTimeStr[0] = '\0';
+        
+        saveToEEPROM(index);
+
+        Serial.println("\n╔════════════════════════════════════════════════════════╗");
+        Serial.printf("║  🟢 PRESS %d STARTED                                    ║\n", index + 1);
+        Serial.println("╚════════════════════════════════════════════════════════╝");
+        Serial.printf("📅 Date: %s\n", presses[index].startDate);
+        Serial.printf("🕐 Time: %s\n", presses[index].startTimeStr);
+        Serial.printf("📊 Epoch: %lu\n", presses[index].startEpoch);
+        Serial.printf("🔌 GPIO: %d (Pin %d)\n", index + 1, switchPins[index]);
+        Serial.println("═══════════════════════════════════════════════════════\n");
+      }
+    } else {
+      // Reset counters if HIGH
+      presses[index].consecutiveLowReadings = 0;
+      presses[index].consecutiveHighReadings++;
+    }
+  }
+  
+  // === STATE MACHINE: PRESSED (ACTIVE) ===
+  else {
+    unsigned long runningTime = currentEpoch > 100000 ? (currentEpoch - presses[index].startEpoch) : 0;
+    
+    // Intensive monitoring when press is active
+    if (currentMillis - presses[index].lastMonitorTime >= ACTIVE_MONITORING_INTERVAL) {
+      presses[index].lastMonitorTime = currentMillis;
+      
+      // Check for release condition
+      if (rawReading == HIGH) {
+        presses[index].consecutiveHighReadings++;
+        presses[index].consecutiveLowReadings = 0;
+        
+        if (presses[index].consecutiveHighReadings == 1) {
+          presses[index].lastStateChangeTime = currentMillis;
+        }
+        
+        unsigned long timeHigh = currentMillis - presses[index].lastStateChangeTime;
+        
+        // Quick response for press release
+        if (timeHigh >= PRESS_END_DEBOUNCE) {
+          Serial.printf("\n🔍 Press %d: HIGH detected for %.1f sec, verifying release...\n", 
+                        index + 1, timeHigh / 1000.0);
+          
+          if (verifyPressRelease(index)) {
+            // Record end time BEFORE sending data
+            recordEndTime(index);
+            endPress(index, "Normal release detected");
+          }
+        }
+      } else {
+        // Still LOW - reset HIGH counter
+        presses[index].consecutiveHighReadings = 0;
+        presses[index].consecutiveLowReadings++;
+      }
+      
+      // CRITICAL: Over-duration protection
+      if (runningTime > MAX_EXPECTED_DURATION) {
+        Serial.printf("\n⚠️⚠️⚠️ CRITICAL: Press %d exceeded maximum expected duration!\n", index + 1);
+        Serial.printf("Running time: %lu sec (%lu min)\n", runningTime, runningTime / 60);
+        Serial.printf("Max expected: %lu sec (%lu min)\n", MAX_EXPECTED_DURATION, MAX_EXPECTED_DURATION / 60);
+        Serial.println("Performing emergency verification...");
+        
+        if (verifyPressRelease(index)) {
+          // Record end time BEFORE sending data
+          recordEndTime(index);
+          endPress(index, "Emergency termination - exceeded max duration");
+        } else {
+          Serial.println("⚠️ Verification shows press is genuinely still active!");
+          Serial.println("This may indicate a stuck mechanical condition.");
+          Serial.println("Continuing to monitor...\n");
+        }
+      }
+      
+      // Enhanced monitoring when approaching expected duration
+      else if (runningTime > CRITICAL_CHECK_THRESHOLD) {
+        if (runningTime % 60 == 0) { // Every minute after threshold
+          Serial.printf("⏰ Press %d: %lu minutes elapsed - performing integrity check\n", 
+                        index + 1, runningTime / 60);
+          
+          if (verifyPressRelease(index)) {
+            // Record end time BEFORE sending data
+            recordEndTime(index);
+            endPress(index, "Integrity check detected missed release");
+          }
+        }
+      }
+    }
+  }
+}
+
+// ---------- COMMUNICATION HEALTH CHECKER ----------
+void checkCommunicationHealth() {
+  unsigned long currentMillis = millis();
+  
+  // Check for 3 consecutive HTTP errors
+  if (httpErrorCount >= MAX_HTTP_ERROR_COUNT) {
+    emergencyReboot("3 consecutive HTTP errors detected");
+    return;
+  }
+  
+  // Check for WiFi disconnected for too long
+  if (wifiConnected == false && (currentMillis - lastWifiConnectedTime) > MAX_WIFI_DISCONNECT_TIME) {
+    emergencyReboot("WiFi disconnected for more than 30 seconds");
+    return;
+  }
+  
+  // Check for too many WiFi connection attempts
+  if (wifiConnectAttempts >= MAX_WIFI_CONNECT_ATTEMPTS) {
+    emergencyReboot("WiFi connection failed after maximum attempts");
+    return;
+  }
+  
+  // Check for total communication errors in time window
+  if (totalCommErrors > 0) {
+    if (firstCommErrorTime == 0) {
+      firstCommErrorTime = currentMillis;
+    }
+    
+    // If we have too many errors in the time window, reboot
+    if (totalCommErrors >= MAX_COMM_ERROR_RESET_COUNT && 
+        (currentMillis - firstCommErrorTime) <= COMM_ERROR_WINDOW) {
+      emergencyReboot("Too many communication errors in 60-second window");
+      return;
+    }
+    
+    // Reset error window if time has passed
+    if ((currentMillis - firstCommErrorTime) > COMM_ERROR_WINDOW) {
+      resetErrorCounters();
+    }
+  }
+}
+
+// ---------- TRACK COMMUNICATION ERROR ----------
+void trackCommunicationError() {
+  totalCommErrors++;
+  if (firstCommErrorTime == 0) {
+    firstCommErrorTime = millis();
+  }
+  
+  Serial.printf("⚠️ Communication error tracked. Total errors: %d (Window: %lu ms)\n", 
+                totalCommErrors, millis() - firstCommErrorTime);
+}
+
+// ---------- RESET ERROR COUNTERS ----------
+void resetErrorCounters() {
+  httpErrorCount = 0;
+  totalCommErrors = 0;
+  firstCommErrorTime = 0;
+  wifiConnectAttempts = 0;
+  Serial.println("✅ Communication error counters reset");
+}
+
+// ---------- EMERGENCY REBOOT ----------
+void emergencyReboot(const char* reason) {
+  if (isRebooting) return; // Prevent multiple reboot calls
+  
+  isRebooting = true;
+  
+  Serial.println("\n\n╔════════════════════════════════════════════════════════╗");
+  Serial.println("║         ⚠️  EMERGENCY REBOOT TRIGGERED ⚠️           ║");
+  Serial.println("╚════════════════════════════════════════════════════════╝");
+  Serial.printf("Reason: %s\n", reason);
+  Serial.printf("HTTP Error Count: %d\n", httpErrorCount);
+  Serial.printf("Total Comm Errors: %d\n", totalCommErrors);
+  Serial.printf("WiFi Connect Attempts: %d\n", wifiConnectAttempts);
+  Serial.printf("WiFi Connected: %s\n", wifiConnected ? "Yes" : "No");
+  if (lastWifiConnectedTime > 0) {
+    Serial.printf("WiFi Disconnected Time: %lu ms\n", millis() - lastWifiConnectedTime);
+  }
+  Serial.println("\n🔄 Rebooting in 5 seconds...");
+  Serial.println("═══════════════════════════════════════════════════════\n");
+  
+  // Save any critical data to EEPROM before rebooting
+  for (int i = 0; i < 5; i++) {
+    if (presses[i].isPressed) {
+      saveToEEPROM(i);
+    }
+  }
+  
+  EEPROM.commit();
+  
+  delay(5000);
+  ESP.restart();
+}
+
+// ---------- UPDATE PRESS DURATION ----------
+void updatePressDuration(int index) {
+  unsigned long currentMillis = millis();
+  
+  // Only update duration every 10 seconds for active presses
+  if (currentMillis - presses[index].lastUpdateTime >= 10000) {
+    presses[index].lastUpdateTime = currentMillis;
+    
+    // Mark for batch update (but not immediate send)
+    // Duration updates go in the regular batch, not as immediate events
+    // This prevents overwriting end time!
+  }
+}
+
+// ---------- RECORD END TIME ----------
+void recordEndTime(int index) {
+  if (!presses[index].hasEndTime) {
+    getDateTime(presses[index].endDate, presses[index].endTimeStr);
+    presses[index].hasEndTime = true;
+    Serial.printf("✅ Press %d end time recorded: %s %s\n", 
+                  index + 1, presses[index].endDate, presses[index].endTimeStr);
+  }
+}
+
+// ---------- MULTI-LEVEL VERIFICATION ----------
+int readPinWithVerification(int pin, int samples, int delayMs) {
+  int highCount = 0;
+  int lowCount = 0;
+  
+  for (int i = 0; i < samples; i++) {
+    int reading = digitalRead(pin);
+    if (reading == HIGH) {
+      highCount++;
+    } else {
+      lowCount++;
+    }
+    if (i < samples - 1) {
+      delay(delayMs);
+    }
+  }
+  
+  // Return state based on majority
+  return (highCount > lowCount) ? HIGH : LOW;
+}
+
+bool verifyPressRelease(int index) {
+  Serial.println("\n┌─────────────────────────────────────────────────────┐");
+  Serial.printf("│  VERIFICATION: Press %d Release Check              │\n", index + 1);
+  Serial.println("└─────────────────────────────────────────────────────┘");
+  
+  // LEVEL 1: Quick verification (5 samples, 100ms apart = 0.5 seconds)
+  Serial.println("\n▸ Level 1: Quick Check (5 samples @ 100ms)");
+  int level1 = readPinWithVerification(switchPins[index], 
+                                       VERIFICATION_QUICK_SAMPLES, 
+                                       VERIFICATION_QUICK_DELAY);
+  Serial.printf("  Result: %s\n", level1 == HIGH ? "HIGH ✓" : "LOW ✗");
+  
+  if (level1 == LOW) {
+    Serial.println("  ⚠️ Still reading LOW - press may still be active");
+    return false;
+  }
+  
+  delay(300);
+  
+  // LEVEL 2: Thorough verification (20 samples, 100ms apart = 2 seconds)
+  Serial.println("\n▸ Level 2: Thorough Check (20 samples @ 100ms)");
+  int level2 = readPinWithVerification(switchPins[index], 
+                                       VERIFICATION_THOROUGH_SAMPLES, 
+                                       VERIFICATION_THOROUGH_DELAY);
+  Serial.printf("  Result: %s\n", level2 == HIGH ? "HIGH ✓" : "LOW ✗");
+  
+  if (level2 == LOW) {
+    Serial.println("  ⚠️ Level 2 shows LOW - false alarm, press still active");
+    return false;
+  }
+  
+  delay(500);
+  
+  // LEVEL 3: Final confirmation (10 samples, 100ms apart = 1 second)
+  Serial.println("\n▸ Level 3: Final Confirmation (10 samples @ 100ms)");
+  int level3 = readPinWithVerification(switchPins[index], 10, 100);
+  Serial.printf("  Result: %s\n", level3 == HIGH ? "HIGH ✓" : "LOW ✗");
+  
+  Serial.println("\n┌─────────────────────────────────────────────────────┐");
+  if (level1 == HIGH && level2 == HIGH && level3 == HIGH) {
+    Serial.println("│  ✅ VERIFIED: Press release confirmed              │");
+    Serial.println("│     All 3 verification levels show HIGH             │");
+    Serial.println("└─────────────────────────────────────────────────────┘\n");
+    return true;
+  } else {
+    Serial.println("│  ❌ NOT VERIFIED: Inconsistent readings            │");
+    Serial.printf("│     L1:%s L2:%s L3:%s                             │\n",
+                  level1 == HIGH ? "HIGH" : "LOW ",
+                  level2 == HIGH ? "HIGH" : "LOW ",
+                  level3 == HIGH ? "HIGH" : "LOW ");
+    Serial.println("└─────────────────────────────────────────────────────┘\n");
+    return false;
+  }
+}
+
+// ---------- END PRESS ----------
+void endPress(int index, const char* reason) {
+  unsigned long currentEpoch = time(nullptr);
+  
+  if (currentEpoch < 100000) {
+    Serial.println("⚠️ Invalid time for press end, resyncing...");
+    configTime(timezone, 0, "pool.ntp.org", "time.nist.gov");
+    delay(2000);
+    currentEpoch = time(nullptr);
+  }
+  
+  unsigned long duration = currentEpoch - presses[index].startEpoch;
+  
+  // Make sure end time is recorded
+  if (!presses[index].hasEndTime) {
+    recordEndTime(index);
+  }
+
+  Serial.println("\n╔════════════════════════════════════════════════════════╗");
+  Serial.printf("║  🔴 PRESS %d ENDED                                      ║\n", index + 1);
+  Serial.println("╚════════════════════════════════════════════════════════╝");
+  Serial.printf("📋 Reason: %s\n", reason);
+  Serial.printf("⏱️  Duration: %lu seconds (%lu minutes %.1f seconds)\n", 
+                duration, duration / 60, (duration % 60) / 1.0);
+  Serial.printf("📅 Started: %s %s\n", presses[index].startDate, presses[index].startTimeStr);
+  Serial.printf("🏁 Ended: %s %s\n", presses[index].endDate, presses[index].endTimeStr);
+  Serial.println("═══════════════════════════════════════════════════════\n");
+
+  // Mark as complete event with immediate send
+  presses[index].isCompleteEvent = true;
+  presses[index].needsImmediateSend = true;
+  presses[index].dataSent = true;
+  
+  // Reset press state (but keep data for sending)
+  presses[index].isPressed = false;
+  presses[index].logicalState = HIGH;
+  presses[index].physicalState = HIGH;
+  presses[index].consecutiveHighReadings = 0;
+  presses[index].consecutiveLowReadings = 0;
+  clearEEPROM(index);
+}
+
+// ---------- BATCH SEND FUNCTION ----------
+void sendBatchUpdate(bool forceAll) {
+  unsigned long currentEpoch = time(nullptr);
+  
+  if (currentEpoch < 100000) {
+    Serial.println("⚠️ Time not valid, skipping batch send");
+    trackCommunicationError(); // Count time sync error
+    return;
+  }
+
+  // Build batch data for all presses that need updating
+  String batchData = "";
+  int pressCount = 0;
+  bool hasImmediateData = false;
+
+  for (int i = 0; i < 5; i++) {
+    bool shouldSend = false;
+    bool isComplete = false;
+    unsigned long duration = 0;
+    char endDate[12] = "";
+    char endTime[10] = "";
+
+    // Check if this press needs to be sent
+    if (presses[i].needsImmediateSend) {
+      // Immediate send (start or end event)
+      shouldSend = true;
+      hasImmediateData = true;
+      isComplete = presses[i].isCompleteEvent; // TRUE only for completion events
+      
+      if (isComplete) {
+        duration = currentEpoch - presses[i].startEpoch;
+        strcpy(endDate, presses[i].endDate);
+        strcpy(endTime, presses[i].endTimeStr);
+      } else {
+        // Start event - duration is 0
+        duration = 0;
+      }
+      
+      presses[i].needsImmediateSend = false; // Clear flag after processing
+    } else if (presses[i].isPressed && !presses[i].dataSent) {
+      // Periodic update for active press
+      duration = currentEpoch - presses[i].startEpoch;
+      if (duration >= 30) { // Only send if running for at least 30 seconds
+        shouldSend = true;
+        isComplete = false;
+      }
+    }
+
+    if (shouldSend) {
+      if (pressCount > 0) {
+        batchData += "&";
+      }
+
+      // Calculate duration string
+      int hours = duration / 3600;
+      int minutes = (duration % 3600) / 60;
+      int seconds = duration % 60;
+      char durationStr[20];
+      
+      if (hours > 0) {
+        sprintf(durationStr, "%d:%02d:%02d", hours, minutes, seconds);
+      } else {
+        sprintf(durationStr, "%d:%02d", minutes, seconds);
+      }
+
+      // Build data for this press - CRITICAL: Include end time only for completion events
+      batchData += "press" + String(pressCount + 1) + "=" + String(i + 1);
+      batchData += "&date" + String(pressCount + 1) + "=" + String(presses[i].startDate);
+      batchData += "&startTime" + String(pressCount + 1) + "=" + String(presses[i].startTimeStr);
+      
+      if (isComplete) {
+        // For completion events: send actual end time
+        batchData += "&endTime" + String(pressCount + 1) + "=" + String(endTime);
+      } else {
+        // For start/update events: send empty end time
+        batchData += "&endTime" + String(pressCount + 1) + "=";
+      }
+      
+      batchData += "&duration" + String(pressCount + 1) + "=" + String(durationStr);
+      batchData += "&complete" + String(pressCount + 1) + "=" + String(isComplete ? "1" : "0");
+      batchData += "&isStart" + String(pressCount + 1) + "=" + String((!isComplete && duration == 0) ? "1" : "0");
+
+      pressCount++;
+
+      Serial.printf("📦 Press %d: %s, Duration: %s, Complete: %s\n", 
+                    i + 1, 
+                    (!isComplete && duration == 0) ? "START" : (isComplete ? "END" : "UPDATE"),
+                    durationStr,
+                    isComplete ? "YES" : "NO");
+    }
+  }
+
+  if (pressCount == 0) {
+    // Nothing to send
+    return;
+  }
+
+  // Add press count to data
+  batchData = "count=" + String(pressCount) + "&" + batchData;
+
+  Serial.println("\n╔════════════════════════════════════════════════════════╗");
+  Serial.printf("║  📡 BATCH TRANSMISSION (%d presses)                     ║\n", pressCount);
+  Serial.println("╚════════════════════════════════════════════════════════╝");
+
+  // Send the batch
+  const int MAX_RETRIES = 3;
+  const int RETRY_DELAY = 5000;
+  bool success = false;
+
+  for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("⚠️ WiFi disconnected during send! Reconnecting...");
+      trackCommunicationError(); // Count WiFi disconnect
+      connectWiFi();
+      if (WiFi.status() != WL_CONNECTED) {
+        Serial.printf("❌ WiFi reconnect failed (attempt %d/%d)\n", attempt, MAX_RETRIES);
+        httpErrorCount++; // Count as HTTP error
+        delay(RETRY_DELAY);
+        continue;
+      }
+    }
+
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    HTTPClient http;
+    Serial.printf("\n📤 Transmission attempt %d/%d\n", attempt, MAX_RETRIES);
+
+    http.begin(client, scriptURL);
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+    http.setTimeout(30000);
+
+    Serial.println("Data: " + batchData);
+
+    int httpCode = http.POST(batchData);
+    if (httpCode > 0) {
+      Serial.printf("✓ HTTP Response: %d\n", httpCode);
+      String payload = http.getString();
+      Serial.println("✓ Server Response: " + payload);
+      if (httpCode == 200 || httpCode == 302) {
+        Serial.println("✅ Batch transmitted successfully!\n");
+        success = true;
+        resetErrorCounters(); // Reset counters on successful transmission
+        http.end();
+        break;
+      } else {
+        // HTTP error (but got a response)
+        Serial.printf("⚠️ HTTP Error Code: %d\n", httpCode);
+        httpErrorCount++;
+        trackCommunicationError();
+      }
+    } else {
+      // No HTTP response at all
+      Serial.printf("❌ HTTP Connection Error: %s\n", http.errorToString(httpCode).c_str());
+      httpErrorCount++;
+      trackCommunicationError();
+    }
+
+    http.end();
+    if (attempt < MAX_RETRIES) {
+      Serial.printf("🔁 Retrying in %d seconds...\n", RETRY_DELAY / 1000);
+      delay(RETRY_DELAY);
+    }
+  }
+
+  if (!success) {
+    Serial.println("❌ All transmission attempts failed!");
+    Serial.println("⚠️ Data may be lost - system will retry on next interval");
+    // Don't restart immediately, let checkCommunicationHealth() handle it
+  } else {
+    Serial.println("═══════════════════════════════════════════════════════\n");
+  }
+}
+
+// ---------- WATCHDOG SYSTEM ----------
+void watchdogCheck(int index) {
+  unsigned long currentMillis = millis();
+  unsigned long timeSinceLastRead = currentMillis - presses[index].lastSuccessfulReadTime;
+  
+  // If we haven't successfully read the pin in 10 seconds, something is wrong
+  if (timeSinceLastRead > 10000) {
+    presses[index].missedReadings++;
+    Serial.printf("⚠️ Watchdog: Press %d - %d missed readings (%.1f sec)\n", 
+                  index + 1, presses[index].missedReadings, timeSinceLastRead / 1000.0);
+    
+    if (presses[index].missedReadings > 5) {
+      Serial.println("❌ Watchdog: Too many missed readings - system issue detected");
+      Serial.println("Attempting recovery...");
+      ESP.restart();
+    }
+  } else {
+    presses[index].missedReadings = 0;
+  }
+}
+
+// ---------- TIME VALIDATION ----------
+bool isTimeValid() {
+  time_t now = time(nullptr);
+  return (now >= 100000);
+}
+
+// ---------- GET DATETIME ----------
+void getDateTime(char* dateStr, char* timeStr) {
+  time_t now = time(nullptr);
+  struct tm* timeinfo = localtime(&now);
+  
+  if (timeinfo->tm_year < 100 || now < 100000) {
+    Serial.println("⚠️ Invalid time in getDateTime, forcing resync...");
+    configTime(timezone, 0, "pool.ntp.org", "time.nist.gov");
+    delay(2000);
+    now = time(nullptr);
+    timeinfo = localtime(&now);
+    
+    if (timeinfo->tm_year < 100 || now < 100000) {
+      strcpy(dateStr, "01/01/2024");
+      strcpy(timeStr, "00:00:00");
+      Serial.println("❌ Time sync failed critically!");
+      trackCommunicationError(); // Count time sync failure
+      return;
+    }
+  }
+  
+  sprintf(dateStr, "%02d/%02d/%04d", timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year + 1900);
+  sprintf(timeStr, "%02d:%02d:%02d", timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+}
+
+// ---------- EEPROM OPERATIONS ----------
+void saveToEEPROM(int index) {
+  int addr = presses[index].eepromAddr;
+  EEPROM.write(addr, 0xAA);
+  EEPROM.put(addr + 1, presses[index].startEpoch);
+  for (int i = 0; i < 12; i++) EEPROM.write(addr + 9 + i, presses[index].startDate[i]);
+  for (int i = 0; i < 10; i++) EEPROM.write(addr + 21 + i, presses[index].startTimeStr[i]);
+  EEPROM.commit();
+  Serial.printf("💾 Press %d state saved to EEPROM\n", index + 1);
+}
+
+void clearEEPROM(int index) {
+  int addr = presses[index].eepromAddr;
+  EEPROM.write(addr, 0x00);
+  EEPROM.commit();
+  Serial.printf("💾 Press %d state cleared from EEPROM\n", index + 1);
+}
+
+// ---------- POWER LOSS RECOVERY ----------
+void recoverFromPowerLoss() {
+  Serial.println("\n🔍 Checking for power loss recovery...");
+  bool recovered = false;
+  unsigned long currentEpoch = time(nullptr);
+  
+  for (int i = 0; i < 5; i++) {
+    int addr = presses[i].eepromAddr;
+    if (EEPROM.read(addr) == 0xAA) {
+      unsigned long savedEpoch;
+      EEPROM.get(addr + 1, savedEpoch);
+      for (int j = 0; j < 12; j++) presses[i].startDate[j] = EEPROM.read(addr + 9 + j);
+      for (int j = 0; j < 10; j++) presses[i].startTimeStr[j] = EEPROM.read(addr + 21 + j);
+      
+      presses[i].startEpoch = savedEpoch;
+      presses[i].isPressed = true;
+      presses[i].dataSent = false;
+      presses[i].isCompleteEvent = false;
+      presses[i].needsImmediateSend = false;
+      presses[i].logicalState = LOW;
+      presses[i].lastMonitorTime = millis();
+      presses[i].lastUpdateTime = millis();
+      
+      unsigned long recoveredDuration = currentEpoch - savedEpoch;
+      
+      Serial.println("\n╔════════════════════════════════════════════════════════╗");
+      Serial.printf("║  🔄 RECOVERED: Press %d from power loss               ║\n", i + 1);
+      Serial.println("╚════════════════════════════════════════════════════════╝");
+      Serial.printf("📅 Original start: %s %s\n", presses[i].startDate, presses[i].startTimeStr);
+      Serial.printf("⏱️  Recovered duration: %lu seconds (%lu minutes)\n", recoveredDuration, recoveredDuration / 60);
+      Serial.println("═══════════════════════════════════════════════════════\n");
+      
+      recovered = true;
+    }
+  }
+  
+  if (!recovered) {
+    Serial.println("✓ No recovery needed - clean startup\n");
+  }
+}
+
+// ---------- WIFI CONNECTION ----------
+void connectWiFi() {
+  Serial.println("\n📡 Establishing WiFi connection...");
+  Serial.printf("SSID: %s\n", ssid);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  
+  wifiConnectAttempts++;
+  Serial.printf("Connection attempt %d/%d\n", wifiConnectAttempts, MAX_WIFI_CONNECT_ATTEMPTS);
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiConnected = true;
+    lastWifiConnectedTime = millis();
+    wifiConnectAttempts = 0; // Reset on success
+    resetErrorCounters();    // Reset all error counters on successful connection
+    
+    Serial.println("\n✅ WiFi Connected!");
+    Serial.printf("IP Address: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("Signal Strength: %d dBm\n", WiFi.RSSI());
+  } else {
+    wifiConnected = false;
+    Serial.println("\n❌ WiFi Connection Failed!");
+    trackCommunicationError(); // Count WiFi connection failure
+    
+    if (wifiConnectAttempts >= MAX_WIFI_CONNECT_ATTEMPTS) {
+      emergencyReboot("Maximum WiFi connection attempts reached");
+    } else {
+      Serial.printf("Will retry... (Attempt %d/%d)\n", wifiConnectAttempts, MAX_WIFI_CONNECT_ATTEMPTS);
+    }
+  }
+}
+
+// ---------- CONNECTION TEST ----------
+void testConnection() {
+  Serial.println("\n🧪 Testing Google Script connectivity...");
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  
+  http.begin(client, scriptURL);
+  http.setTimeout(15000);
+  int httpCode = http.GET();
+  
+  if (httpCode > 0) {
+    Serial.printf("✅ Connection test successful! HTTP Code: %d\n", httpCode);
+    String payload = http.getString();
+    Serial.println("Response: " + payload);
+    resetErrorCounters(); // Reset on successful test
+  } else {
+    Serial.printf("❌ Connection test failed! Error: %s\n", http.errorToString(httpCode).c_str());
+    Serial.println("\n⚠️  Verify your Google Script URL and deployment settings!");
+    trackCommunicationError(); // Count test failure
+    httpErrorCount++; // Also count as HTTP error
+    
+    // Check if we should reboot immediately
+    checkCommunicationHealth();
+  }
+  http.end();
+}
