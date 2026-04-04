@@ -1,0 +1,170 @@
+/*
+ * ESP8266 Switch Monitor - FAST VERSION
+ * Monitors 5 switches and sends their status to Google Sheets every 10 seconds
+ * Reboots instantly on HTTP failure (no retry logic)
+ */
+
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClientSecure.h>
+
+// WiFi credentials
+const char* ssid = "PlyLab";
+const char* password = "sharon123#@";
+
+// Google Apps Script Web App URL (replace with your deployment URL)
+const char* serverName = "https://script.google.com/macros/s/AKfycbwG0cQzNXlFqkO2IyPDVjm_KQsIzJKNKrAw4b60wyHTj9pmU7tzbdjo6HNUeSRmk0Av/exec";
+
+// Switch pins
+const int switchPins[5] = {5, 4, 14, 12, 13};
+const char* prepressNames[5] = {"Prepress 1", "Prepress 2", "Prepress 3", "Prepress 4", "Prepress 5"};
+
+// Timing - 10 seconds interval
+unsigned long lastSendTime = 0;
+const unsigned long sendInterval = 10000; // 10 seconds
+
+// Switch states
+bool switchStates[5];
+
+void setup() {
+  Serial.begin(115200);
+  delay(100);
+  
+  Serial.println("\n\nSwitch Monitor Starting...");
+  
+  // Initialize switch pins
+  for (int i = 0; i < 5; i++) {
+    pinMode(switchPins[i], INPUT_PULLUP);
+    switchStates[i] = digitalRead(switchPins[i]);
+  }
+  
+  // Connect to WiFi
+  connectWiFi();
+  
+  // If WiFi fails, reboot immediately
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi connection failed! Rebooting...");
+    delay(1000);
+    ESP.restart();
+  }
+}
+
+void loop() {
+  // Check WiFi connection
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi disconnected! Rebooting immediately...");
+    delay(1000);
+    ESP.restart();
+  }
+  
+  // Read switch states
+  for (int i = 0; i < 5; i++) {
+    switchStates[i] = digitalRead(switchPins[i]);
+  }
+  
+  // Send data every 10 seconds
+  if (millis() - lastSendTime >= sendInterval) {
+    sendDataToGoogleSheets();
+    lastSendTime = millis();
+  }
+  
+  delay(100); // Small delay to prevent excessive CPU usage
+}
+
+void connectWiFi() {
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(ssid);
+  
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi connected!");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\nWiFi connection failed!");
+  }
+}
+
+void sendDataToGoogleSheets() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected. Rebooting...");
+    delay(1000);
+    ESP.restart();
+  }
+  
+  WiFiClientSecure client;
+  client.setInsecure(); // For simplicity, not verifying SSL certificate
+  
+  HTTPClient https;
+  
+  // Build the data string
+  String statusData = "";
+  for (int i = 0; i < 5; i++) {
+    if (i > 0) statusData += ",";
+    // INPUT_PULLUP means LOW = closed, HIGH = open
+    statusData += (switchStates[i] == LOW) ? "closed" : "open";
+  }
+  
+  // Build the URL with query parameters
+  String url = String(serverName) + "?status=" + statusData;
+  
+  Serial.println("Sending data to Google Sheets...");
+  Serial.print("Status: ");
+  Serial.println(statusData);
+  
+  if (https.begin(client, url)) {
+    https.setTimeout(10000); // 10 second timeout
+    
+    int httpResponseCode = https.GET();
+    
+    if (httpResponseCode > 0) {
+      String response = https.getString();
+      Serial.print("HTTP Response code: ");
+      Serial.println(httpResponseCode);
+      Serial.print("Response: ");
+      Serial.println(response);
+      
+      // Check for success
+      if (httpResponseCode == 200 || httpResponseCode == 302) {
+        Serial.println("✓ Data sent successfully!");
+      } else {
+        Serial.println("✗ Unexpected HTTP response! Rebooting...");
+        https.end();
+        delay(1000);
+        ESP.restart();
+      }
+    } else {
+      Serial.print("✗ HTTP Error: ");
+      Serial.println(https.errorToString(httpResponseCode));
+      Serial.println("Rebooting immediately...");
+      https.end();
+      delay(1000);
+      ESP.restart();
+    }
+    
+    https.end();
+    
+  } else {
+    Serial.println("✗ Unable to connect to server! Rebooting...");
+    delay(1000);
+    ESP.restart();
+  }
+  
+  // Print current switch states for debugging
+  Serial.println("\nCurrent Switch States:");
+  for (int i = 0; i < 5; i++) {
+    Serial.print(prepressNames[i]);
+    Serial.print(": ");
+    Serial.println(switchStates[i] == LOW ? "CLOSED" : "OPEN");
+  }
+  Serial.println("---");
+}
