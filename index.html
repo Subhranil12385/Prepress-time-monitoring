@@ -420,6 +420,14 @@
     .idle-time { font-weight: 600; color: #6c757d; }
     .no-data { text-align: center; padding: 40px 15px; color: #6c757d; font-size: 1.1em; }
 
+    /* midnight-merge badge */
+    .midnight-badge {
+      display: inline-block; font-size: 0.7em; background: #e8f4fd;
+      color: #1565c0; border-radius: 3px; padding: 1px 5px;
+      margin-left: 4px; vertical-align: middle; font-weight: 600;
+    }
+    body.dark-mode .midnight-badge { background: #1a2a3a; color: #90caf9; }
+
     /* ===== Stats ===== */
     .stats {
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
@@ -503,7 +511,7 @@
     body.dark-mode .all-stat-card h4 { color: #d4af37; }
     body.dark-mode .all-stat-card .value { color: #ffd700; text-shadow: 0 0 10px rgba(255,215,0,0.3); }
 
-    /* ===== Closed/Open badge (from index 14/19 logic) ===== */
+    /* ===== Closed/Open badge ===== */
     .duration-badge {
       display: inline-block; padding: 3px 8px;
       background: #e7f3ff; color: #0066cc;
@@ -514,7 +522,6 @@
       background: #fff3e0; color: #e65100;
       border-radius: 4px; font-weight: 600; font-size: 0.85em;
     }
-    /* Closed row = press off, not in progress */
     tbody tr.closed-row { opacity: 0.7; }
 
     /* Background fetch progress indicator */
@@ -749,16 +756,7 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
   <script>
-    // =====================================================================
-    // APPS SCRIPT URL — from index (14)(19): uses closed/open (getData) logic
-    // =====================================================================
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwG0cQzNXlFqkO2IyPDVjm_KQsIzJKNKrAw4b60wyHTj9pmU7tzbdjo6HNUeSRmk0Av/exec';
-
-    // =====================================================================
-    // DATA MODEL
-    // index (14)(19) returns: { data: [ { closedFrom, closedTo, duration, idle, durationMs, idleMs } ] }
-    // We normalise this to V2's internal format: { startTime, endTime, duration, date }
-    // =====================================================================
 
     const LOADING_QUOTES = [
       "Every step forward counts.", "Patience builds great results.",
@@ -810,26 +808,142 @@
       return LOADING_QUOTES[Math.floor(Math.random() * LOADING_QUOTES.length)];
     }
 
-    // Global state
     let currentPress = "all";
-    let allData = {};           // press# -> normalised records
-    let todayStatusData = {};   // press# -> raw today records
+    let allData = {};
+    let todayStatusData = {};
     let fromDatePicker, toDatePicker;
     let darkMode = false;
     let fireflies = [], orbs = [], meteors = [], meteorInterval = null;
     let filterEnabled = true, filterThreshold = 6, filteredCount = 0;
     let filterMinimized = true;
-    let pressesLoaded = 0;      // tracks background fetch progress
+    let pressesLoaded = 0;
 
     // =====================================================================
-    // NORMALISE: Convert index(14)(19) response format → V2 internal format
-    // index(14)(19) getData returns array of:
-    //   { closedFrom: "HH:MM:SS", closedTo: "HH:MM:SS or ''", duration: "MM:SS", idle: "...", durationMs, idleMs }
-    //   The date is embedded inside closedFrom if it's a full datetime string,
-    //   OR the server just returns time strings and the sheet date is implicit.
+    // MIDNIGHT-CROSSING MERGE
+    // =====================================================================
+    // The Apps Script splits a session that crosses midnight into two records:
+    //   Record A: date=Day1, closedFrom="Day1 23:43:20", closedTo="Day1 23:59:59 (ongoing)" [or similar]
+    //   Record B: date=Day2, closedFrom="Day2 00:00:13", closedTo="Day2 00:09:41"
     //
-    // The Apps Script sends date+time as "DD/MM/YYYY HH:MM:SS" or just "HH:MM:SS".
-    // We inspect the data and parse accordingly.
+    // We detect pairs where:
+    //   - Record A has endTime close to 23:59:xx (or is missing/ongoing)
+    //   - Record B has startTime close to 00:00:xx
+    //   - Record B's date is exactly one day after Record A's date
+    //
+    // When found, we merge them: keep Record A's start, use Record B's end,
+    // recompute the total duration, and discard Record B.
+    // =====================================================================
+
+    function parseDateDMY(dateStr) {
+      if (!dateStr) return null;
+      const parts = dateStr.split('/');
+      if (parts.length !== 3) return null;
+      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    }
+
+    function isNextDay(dateA, dateB) {
+      const a = parseDateDMY(dateA);
+      const b = parseDateDMY(dateB);
+      if (!a || !b) return false;
+      const diff = b.getTime() - a.getTime();
+      return diff === 86400000; // exactly 1 day
+    }
+
+    function isNearMidnightEnd(timeStr) {
+      // True if endTime is 23:5x:xx (last 10 mins of a day) or missing/ongoing
+      if (!timeStr || timeStr.trim() === '') return true;
+      const lower = timeStr.toLowerCase();
+      if (lower.includes('ongoing') || lower.includes('in progress') || lower.includes('pressing')) return true;
+      const parts = timeStr.split(':');
+      if (parts.length >= 2) {
+        const h = parseInt(parts[0]);
+        const m = parseInt(parts[1]);
+        return h === 23 && m >= 50;
+      }
+      return false;
+    }
+
+    function isNearMidnightStart(timeStr) {
+      // True if startTime is 00:0x:xx (first 10 mins of a day)
+      if (!timeStr) return false;
+      const parts = timeStr.split(':');
+      if (parts.length >= 2) {
+        const h = parseInt(parts[0]);
+        const m = parseInt(parts[1]);
+        return h === 0 && m < 10;
+      }
+      return false;
+    }
+
+    function computeDurationBetween(date1, time1, date2, time2) {
+      // Returns formatted duration string "Xm Ys" for two datetime points
+      try {
+        const toMs = (dateStr, timeStr) => {
+          const dp = (dateStr || '').split('/');
+          const tp = (timeStr || '00:00:00').split(':').map(Number);
+          if (dp.length !== 3) return null;
+          const d = new Date(parseInt(dp[2]), parseInt(dp[1]) - 1, parseInt(dp[0]));
+          d.setHours(tp[0] || 0, tp[1] || 0, tp[2] || 0, 0);
+          return isNaN(d.getTime()) ? null : d.getTime();
+        };
+        const startMs = toMs(date1, time1);
+        const endMs   = toMs(date2, time2);
+        if (startMs === null || endMs === null || endMs <= startMs) return null;
+        const totalSec = Math.floor((endMs - startMs) / 1000);
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        return `${m}m ${s}s`;
+      } catch(e) { return null; }
+    }
+
+    function mergeMidnightSessions(records) {
+      if (!records || records.length < 2) return records;
+
+      // Sort by date then start time (ascending) so consecutive pairs are adjacent
+      const sorted = [...records].sort((a, b) => {
+        const dateA = parseDateDMY(a.date), dateB = parseDateDMY(b.date);
+        const dateDiff = (dateA ? dateA.getTime() : 0) - (dateB ? dateB.getTime() : 0);
+        if (dateDiff !== 0) return dateDiff;
+        const tA = (a.startTime || '00:00:00').split(':').map(Number);
+        const tB = (b.startTime || '00:00:00').split(':').map(Number);
+        return (tA[0]*3600 + tA[1]*60 + (tA[2]||0)) - (tB[0]*3600 + tB[1]*60 + (tB[2]||0));
+      });
+
+      const merged = [];
+      let i = 0;
+      while (i < sorted.length) {
+        const curr = sorted[i];
+        const next = sorted[i + 1];
+
+        if (
+          next &&
+          isNextDay(curr.date, next.date) &&
+          isNearMidnightEnd(curr.endTime) &&
+          isNearMidnightStart(next.startTime)
+        ) {
+          // Merge: span from curr.startTime (Day1) to next.endTime (Day2)
+          const mergedDuration = computeDurationBetween(curr.date, curr.startTime, next.date, next.endTime);
+          const mergedRecord = {
+            date: curr.date,                    // keep Day1's date as the session date
+            startTime: curr.startTime,          // start on Day1
+            endTime: next.endTime,              // end on Day2
+            duration: mergedDuration || next.duration,
+            isMidnightMerge: true,
+            mergedEndDate: next.date,           // for display reference
+            raw: curr.raw
+          };
+          merged.push(mergedRecord);
+          i += 2; // skip both records
+        } else {
+          merged.push(curr);
+          i++;
+        }
+      }
+      return merged;
+    }
+
+    // =====================================================================
+    // NORMALISE: Convert Apps Script response → internal format
     // =====================================================================
 
     function normaliseRecord(raw) {
@@ -838,6 +952,8 @@
       const parseDateTime = (str) => {
         if (!str) return { date: '', time: '' };
         str = str.trim();
+        // Strip trailing "(ongoing)" or similar annotations
+        str = str.replace(/\s*\(.*?\)\s*$/, '').trim();
         // Format: "YYYY-MM-DD HH:MM:SS"
         const iso = str.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})$/);
         if (iso) {
@@ -850,7 +966,7 @@
         // Format: "HH:MM:SS" only
         const t = str.match(/^(\d{2}:\d{2}:\d{2})$/);
         if (t) return { date: '', time: t[1] };
-        // Format: "YYYY-MM-DD" only (date only)
+        // Format: "YYYY-MM-DD" only
         const isoDate = str.match(/^(\d{4}-\d{2}-\d{2})$/);
         if (isoDate) {
           const [y, mo, d] = isoDate[1].split('-');
@@ -864,7 +980,14 @@
 
       date      = from.date || to.date || '';
       startTime = from.time;
-      endTime   = to.time || '';
+
+      // Determine if endTime is genuinely "ongoing" / "in-progress"
+      const rawEndStr = (raw.closedTo || '').trim().toLowerCase();
+      const isOngoing = rawEndStr === '' ||
+                        rawEndStr.includes('ongoing') ||
+                        rawEndStr.includes('in progress') ||
+                        rawEndStr.includes('pressing');
+      endTime = isOngoing ? '' : (to.time || '');
 
       const duration = raw.duration || '';
       return { date, startTime, endTime, duration, raw };
@@ -872,7 +995,9 @@
 
     function normaliseRecords(rawArray) {
       if (!rawArray || !Array.isArray(rawArray)) return [];
-      return rawArray.map(normaliseRecord).filter(r => r.startTime);
+      const normalised = rawArray.map(normaliseRecord).filter(r => r.startTime);
+      // Apply midnight-crossing merge AFTER normalisation
+      return mergeMidnightSessions(normalised);
     }
 
     // =====================================================================
@@ -900,7 +1025,6 @@
 
     function parseDuration(str) {
       if (!str || str === "Pressing" || str === "In Progress") return 0;
-      // Handle "Xm Ys" or "Xm" or "Ys" format (e.g. "33m 2s", "5m", "45s")
       if (/[ms]/.test(str)) {
         const mMatch = str.match(/(\d+)m/);
         const sMatch = str.match(/(\d+)s/);
@@ -920,8 +1044,9 @@
       return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
-    function getDurationClass(str) {
-      if (!str || str === "Pressing" || str === "In Progress") return "in-progress";
+    function getDurationClass(str, isInProgress) {
+      if (isInProgress) return "in-progress";
+      if (!str) return "danger";
       const dur = parseDuration(str);
       if (dur >= 28 * 60) return "success";
       if (dur >= 25 * 60) return "warning";
@@ -932,7 +1057,6 @@
       if (!prevEnd || prevEnd.trim() === '' || !currStart) return null;
       try {
         const toMs = (dateStr, timeStr) => {
-          // dateStr: "DD/MM/YYYY", timeStr: "HH:MM:SS"
           const dp = (dateStr || '').split('/');
           const tp = (timeStr || '').split(':').map(Number);
           if (dp.length !== 3 || tp.length < 2) return null;
@@ -966,29 +1090,23 @@
       return `${String(y.getDate()).padStart(2,'0')}/${String(y.getMonth()+1).padStart(2,'0')}/${y.getFullYear()}`;
     }
 
-    // =====================================================================
-    // FETCH — uses index(14)(19) endpoint with prepress column mapping
-    // Col mapping: 2=Press1, 3=Press2, 4=Press3, 5=Press4, 6=Press5
-    // =====================================================================
-
-    // Returns "YYYY-MM-DD" for today in local time
     function getTodayYMD() {
       const n = new Date();
       return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
     }
 
-    // True when the chosen date range is exactly today — triggers fast Sheet1-only path
     function isRangeToday(fromDate, toDate) {
       const today = getTodayYMD();
       return fromDate === today && toDate === today;
     }
 
+    // =====================================================================
+    // FETCH
+    // =====================================================================
+
     async function fetchDataForPress(press, fromDate, toDate) {
       try {
-        // Map press number (1-5) to column (2-6) as the Apps Script expects
         const col = press + 1;
-        // todayOnly=true → Apps Script reads only the live Sheet1 (fast path)
-        // todayOnly=false → Apps Script also searches archive sheets by date name
         const todayOnly = isRangeToday(fromDate, toDate);
         const url = `${SCRIPT_URL}?action=getData&fromDate=${fromDate}&toDate=${toDate}&prepress=${col}&todayOnly=${todayOnly}`;
         const response = await fetch(url);
@@ -1004,7 +1122,7 @@
     }
 
     // =====================================================================
-    // LOADING — all 5 presses fired simultaneously, UI updates as each resolves
+    // LOADING
     // =====================================================================
 
     async function loadData() {
@@ -1015,7 +1133,6 @@
       const fromFormatted = formatDateToYYYYMMDD(fromDate);
       const toFormatted   = formatDateToYYYYMMDD(toDate);
 
-      // Reset UI
       allData = {};
       pressesLoaded = 0;
 
@@ -1040,7 +1157,6 @@
       bgBar.style.width = "0%";
       bgStatus.textContent = isArchiveMode ? "Searching archive sheets…" : "Fetching all 5 presses…";
 
-      // Fire all 5 fetches at once — update UI as each one comes back
       const promises = [1,2,3,4,5].map(press =>
         fetchDataForPress(press, fromFormatted, toFormatted).then(result => {
           allData[press] = result.records || [];
@@ -1049,14 +1165,12 @@
           bgStatus.textContent = `${pressesLoaded}/5 presses loaded…`;
           document.getElementById("allPressLoadingLabel").textContent = `${pressesLoaded}/5 presses loaded…`;
 
-          // Show UI grid as soon as first press arrives
           if (pressesLoaded === 1 && currentPress === "all") {
             document.getElementById("allPressLoadingContainer").style.display = "none";
             document.getElementById("allPressStats").style.display = "grid";
             document.getElementById("allPressesTables").style.display = "grid";
           }
 
-          // Refresh view incrementally
           if (currentPress === "all") {
             renderPartialAllPresses();
           } else if (currentPress === press) {
@@ -1075,7 +1189,6 @@
       bgStatus.textContent = "All presses loaded ✓";
       setTimeout(() => { bgBarWrap.style.display = "none"; }, 2000);
 
-      // Reuse allData for today-status if date range includes today, else fetch separately
       const todayStr = formatDateToYYYYMMDD(
         `${String(new Date().getDate()).padStart(2,'0')}/${String(new Date().getMonth()+1).padStart(2,'0')}/${new Date().getFullYear()}`
       );
@@ -1086,7 +1199,6 @@
         await loadTodayStatusData();
       }
 
-      // Final render
       if (currentPress === "all") {
         displayAllPresses();
       } else {
@@ -1097,7 +1209,6 @@
       document.getElementById("allPressLoadingContainer").style.display = "none";
     }
 
-    // Render whatever presses are available so far (partial)
     function renderPartialAllPresses() {
       const tables = document.getElementById("allPressesTables");
       tables.innerHTML = "";
@@ -1107,7 +1218,6 @@
         container.className = "mini-table-container";
 
         if (!allData[press]) {
-          // Skeleton placeholder
           container.innerHTML = `
             <div class="mini-table-header">
               <span class="status-indicator status-idle"></span>
@@ -1131,11 +1241,9 @@
         tables.appendChild(container);
       }
 
-      // Update stats with what we have
       updateAllPressStats();
     }
 
-    // Build mini table HTML for a given press
     function buildMiniTableHTML(press) {
       const rawData = allData[press] || [];
       const completedData = rawData.filter(r => r.endTime && r.endTime.trim() !== '');
@@ -1162,12 +1270,17 @@
           <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Duration</th></tr></thead>
           <tbody>
             ${sortedData.slice(0, 3).map(row => {
-              const durationText = !row.endTime || row.endTime.trim() === '' ? "In Progress" : row.duration;
-              return `<tr class="${getDurationClass(row.duration)}">
-                <td>${row.date || '—'}</td>
+              const isInProgress = !row.endTime || row.endTime.trim() === '';
+              const durationText = isInProgress ? "In Progress" : row.duration;
+              const durClass = getDurationClass(row.duration, isInProgress);
+              const midnightBadge = row.isMidnightMerge
+                ? `<span class="midnight-badge" title="Session crossed midnight into ${row.mergedEndDate}">↪ ${row.mergedEndDate}</span>`
+                : '';
+              return `<tr class="${durClass}">
+                <td>${row.date || '—'}${midnightBadge}</td>
                 <td>${row.startTime}</td>
                 <td>${row.endTime || ''}</td>
-                <td class="duration ${getDurationClass(row.duration)}">${durationText}</td>
+                <td class="duration ${durClass}">${durationText}</td>
               </tr>`;
             }).join('')}
             ${sortedData.length > 3 ? `<tr><td colspan="4" class="more-entries" onclick="expandPress(${press})">+${sortedData.length - 3} more — click to expand</td></tr>` : ''}
@@ -1218,7 +1331,7 @@
     }
 
     // =====================================================================
-    // TODAY STATUS (for press indicators)
+    // TODAY STATUS
     // =====================================================================
 
     async function loadTodayStatusData() {
@@ -1226,7 +1339,6 @@
         const todayFormatted = getTodayYMD();
         const promises = [];
         for (let press = 1; press <= 5; press++) {
-          // Always today-only for live status indicators — no archive needed
           promises.push(fetchDataForPress(press, todayFormatted, todayFormatted));
         }
         const results = await Promise.all(promises);
@@ -1297,16 +1409,25 @@
         let idleStr = '00:00:00';
         if (idx < sortedData.length - 1) {
           const nextRow = sortedData[idx + 1];
-          const idle = calculateIdleTime(row.startTime, row.date, nextRow.endTime, nextRow.date);
+          // For merged records, use the mergedEndDate if available for idle calculation
+          const prevEndDate = nextRow.isMidnightMerge ? (nextRow.mergedEndDate || nextRow.date) : nextRow.date;
+          const idle = calculateIdleTime(row.startTime, row.date, nextRow.endTime, prevEndDate);
           if (idle && idle !== '00:00:00') idleStr = idle;
         }
 
         const durationText = isInProgress ? "In Progress" : row.duration;
+        const durClass = getDurationClass(row.duration, isInProgress);
+
+        // Show midnight merge indicator in the date cell
+        const midnightNote = row.isMidnightMerge
+          ? `<br><span class="midnight-badge" title="Session crossed midnight, ended ${row.mergedEndDate}">↪ ends ${row.mergedEndDate}</span>`
+          : '';
+
         tr.innerHTML = `
-          <td>${row.date || '—'}</td>
+          <td>${row.date || '—'}${midnightNote}</td>
           <td>${row.startTime}</td>
           <td>${row.endTime || ''}</td>
-          <td class="duration ${getDurationClass(row.duration)}">${durationText}</td>
+          <td class="duration ${durClass}">${durationText}</td>
           <td class="idle-time">${idleStr}</td>
         `;
         tbody.appendChild(tr);
@@ -1446,7 +1567,7 @@
     }
 
     // =====================================================================
-    // FILTER PANEL CONTROLS (draggable, minimizable)
+    // FILTER PANEL CONTROLS
     // =====================================================================
 
     function initializeFilterControls() {
@@ -1624,19 +1745,19 @@
 
       if (currentPress === "all") {
         filename = `All_Presses_${fromDate.replace(/\//g,'-')}_to_${toDate.replace(/\//g,'-')}.csv`;
-        csvContent = "Press,Date,Start Time,End Time,Duration,Status,Filtered\n";
+        csvContent = "Press,Date,Start Time,End Time,Duration,Status,Midnight Merge,Filtered\n";
         for (let press = 1; press <= 5; press++) {
           const data = allData[press] || [];
           data.forEach(row => {
             const duration = parseDuration(row.duration);
             const isInProgress = !row.endTime || row.endTime.trim() === '';
             const isFiltered = filterEnabled && !isInProgress && duration < filterThreshold * 60;
-            csvContent += `Press ${press},${row.date},${row.startTime},${row.endTime || ""},${isInProgress ? "In Progress" : row.duration},${isInProgress ? "In Progress" : "Completed"},${isFiltered ? "YES" : "NO"}\n`;
+            csvContent += `Press ${press},${row.date},${row.startTime},${row.endTime || ""},${isInProgress ? "In Progress" : row.duration},${isInProgress ? "In Progress" : "Completed"},${row.isMidnightMerge ? "YES (ends "+row.mergedEndDate+")" : "NO"},${isFiltered ? "YES" : "NO"}\n`;
           });
         }
       } else {
         filename = `Press_${currentPress}_${fromDate.replace(/\//g,'-')}_to_${toDate.replace(/\//g,'-')}.csv`;
-        csvContent = "Date,Start Time,End Time,Duration,Idle Time,Status,Filtered\n";
+        csvContent = "Date,Start Time,End Time,Duration,Idle Time,Status,Midnight Merge,Filtered\n";
         const data = allData[currentPress] || [];
         const sortedData = [...data].sort((a,b) => {
           const dateA = parseDate(a.date), dateB = parseDate(b.date);
@@ -1655,7 +1776,7 @@
           const duration = parseDuration(row.duration);
           const isInProgress = !row.endTime || row.endTime.trim() === '';
           const isFiltered = filterEnabled && !isInProgress && duration < filterThreshold * 60;
-          csvContent += `${row.date},${row.startTime},${row.endTime || ""},${isInProgress ? "In Progress" : row.duration},${idleStr},${isInProgress ? "In Progress" : "Completed"},${isFiltered ? "YES" : "NO"}\n`;
+          csvContent += `${row.date},${row.startTime},${row.endTime || ""},${isInProgress ? "In Progress" : row.duration},${idleStr},${isInProgress ? "In Progress" : "Completed"},${row.isMidnightMerge ? "YES (ends "+row.mergedEndDate+")" : "NO"},${isFiltered ? "YES" : "NO"}\n`;
         });
       }
 
@@ -1799,7 +1920,6 @@
       initializePressButtons();
       loadData();
 
-      // Refresh today status every 30s
       loadTodayStatusData();
       setInterval(loadTodayStatusData, 30000);
 
