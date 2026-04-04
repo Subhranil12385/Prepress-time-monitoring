@@ -752,7 +752,7 @@
     // =====================================================================
     // APPS SCRIPT URL — from index (14)(19): uses closed/open (getData) logic
     // =====================================================================
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzordtc-jur8Ym0aUVt_RDNkVjYG4edQqZs6GWiFIhjP54CB1FxABaarO9jmHVcdmSJAg/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwG0cQzNXlFqkO2IyPDVjm_KQsIzJKNKrAw4b60wyHTj9pmU7tzbdjo6HNUeSRmk0Av/exec';
 
     // =====================================================================
     // DATA MODEL
@@ -971,16 +971,30 @@
     // Col mapping: 2=Press1, 3=Press2, 4=Press3, 5=Press4, 6=Press5
     // =====================================================================
 
+    // Returns "YYYY-MM-DD" for today in local time
+    function getTodayYMD() {
+      const n = new Date();
+      return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    }
+
+    // True when the chosen date range is exactly today — triggers fast Sheet1-only path
+    function isRangeToday(fromDate, toDate) {
+      const today = getTodayYMD();
+      return fromDate === today && toDate === today;
+    }
+
     async function fetchDataForPress(press, fromDate, toDate) {
       try {
-        // Map press number (1-5) to column (2-6) as index(14)(19) expects
+        // Map press number (1-5) to column (2-6) as the Apps Script expects
         const col = press + 1;
-        const url = `${SCRIPT_URL}?action=getData&fromDate=${fromDate}&toDate=${toDate}&prepress=${col}`;
+        // todayOnly=true → Apps Script reads only the live Sheet1 (fast path)
+        // todayOnly=false → Apps Script also searches archive sheets by date name
+        const todayOnly = isRangeToday(fromDate, toDate);
+        const url = `${SCRIPT_URL}?action=getData&fromDate=${fromDate}&toDate=${toDate}&prepress=${col}&todayOnly=${todayOnly}`;
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
         if (result.error) throw new Error(result.error);
-        // index(14)(19) returns { data: [...] }
         const raw = result.data || result.records || [];
         return { records: normaliseRecords(raw) };
       } catch (error) {
@@ -1005,8 +1019,10 @@
       allData = {};
       pressesLoaded = 0;
 
+      const isArchiveMode = !isRangeToday(fromFormatted, toFormatted);
+      const modeLabel = isArchiveMode ? "Loading from archive sheets…" : "Loading all presses simultaneously…";
       document.getElementById("allPressLoadingContainer").style.display = "block";
-      document.getElementById("allPressLoadingLabel").textContent = "Loading all presses simultaneously…";
+      document.getElementById("allPressLoadingLabel").textContent = modeLabel;
       document.getElementById("allPressLoadingQuote").textContent = getRandomQuote();
       document.getElementById("allPressStats").style.display = "none";
       document.getElementById("allPressesTables").style.display = "none";
@@ -1022,7 +1038,7 @@
       const bgStatus  = document.getElementById("bgFetchStatus");
       bgBarWrap.style.display = "block";
       bgBar.style.width = "0%";
-      bgStatus.textContent = "Fetching all 5 presses…";
+      bgStatus.textContent = isArchiveMode ? "Searching archive sheets…" : "Fetching all 5 presses…";
 
       // Fire all 5 fetches at once — update UI as each one comes back
       const promises = [1,2,3,4,5].map(press =>
@@ -1207,10 +1223,10 @@
 
     async function loadTodayStatusData() {
       try {
-        const today = new Date();
-        const todayFormatted = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        const todayFormatted = getTodayYMD();
         const promises = [];
         for (let press = 1; press <= 5; press++) {
+          // Always today-only for live status indicators — no archive needed
           promises.push(fetchDataForPress(press, todayFormatted, todayFormatted));
         }
         const results = await Promise.all(promises);
