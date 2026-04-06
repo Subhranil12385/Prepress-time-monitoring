@@ -1023,20 +1023,50 @@
       return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
     }
 
-    function parseDuration(str) {
-      if (!str || str === "Pressing" || str === "In Progress") return 0;
-      if (/[ms]/.test(str)) {
-        const mMatch = str.match(/(\d+)m/);
-        const sMatch = str.match(/(\d+)s/);
-        const m = mMatch ? parseInt(mMatch[1]) : 0;
-        const s = sMatch ? parseInt(sMatch[1]) : 0;
-        return m * 60 + s;
-      }
-      const parts = str.split(':');
-      if (parts.length === 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]);
-      if (parts.length === 3) return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
-      return 0;
-    }
+    
+
+
+
+
+
+
+
+
+
+
+
+function parseDuration(str) {
+  if (!str || str === "Pressing" || str === "In Progress") return 0;
+  if (/[hms]/.test(str)) {
+    const hMatch = str.match(/(\d+)h/);
+    const mMatch = str.match(/(\d+)m/);
+    const sMatch = str.match(/(\d+)s/);
+    const h = hMatch ? parseInt(hMatch[1]) : 0;
+    const m = mMatch ? parseInt(mMatch[1]) : 0;
+    const s = sMatch ? parseInt(sMatch[1]) : 0;
+    return h * 3600 + m * 60 + s;
+  }
+  const parts = str.split(':');
+  if (parts.length === 2) return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+  if (parts.length === 3) return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
+  return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     function formatDuration(secs) {
       const m = Math.floor(secs / 60);
