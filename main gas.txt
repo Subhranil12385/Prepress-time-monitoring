@@ -1,0 +1,735 @@
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+var MAIN_SHEET_NAME = 'Sheet1';
+var SETTINGS_SHEET_NAME = 'Settings';
+var HEADERS = ['Date', 'Time', 'Prepress 1', 'Prepress 2', 'Prepress 3', 'Prepress 4', 'Prepress 5'];
+var TZ = Session.getScriptTimeZone();
+var DRIVE_FOLDER_ID = '1NhWl8XSChN-iTUpXZFYY--yfRTY5rg8c'; // Your Google Drive folder ID
+var MONITOR_EMAIL = 'subhhranilde@gmail.com';
+var OFFLINE_THRESHOLD_MINUTES = 5;
+var PROP_LAST_DATA_TS = 'lastDataTimestamp';
+var PROP_IS_OFFLINE = 'isOffline';
+
+// ─── ROUTING ──────────────────────────────────────────────────────────────────
+
+function doGet(e) {
+  try {
+    var params = e.parameter || {};
+    if (params.action === 'getData') {
+      return handleGetData(params.fromDate, params.toDate, params.prepress, params.todayOnly);
+    }
+    return handleLogData(params);
+  } catch (error) {
+    Logger.log('Error in doGet: ' + error.toString());
+    return ContentService.createTextOutput('Error: ' + error.toString());
+  }
+}
+
+function doPost(e) {
+  try {
+    var params;
+    if (e.postData && e.postData.contents) {
+      params = JSON.parse(e.postData.contents);
+    } else if (e.parameter) {
+      params = e.parameter;
+    } else {
+      throw new Error('No data received');
+    }
+    if (params.action === 'getData') {
+      return handleGetData(params.fromDate, params.toDate, params.prepress, params.todayOnly);
+    }
+    throw new Error('Unknown action');
+  } catch (error) {
+    Logger.log('Error in doPost: ' + error.toString());
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ─── ESP8266 DATA LOGGING ─────────────────────────────────────────────────────
+
+function handleLogData(params) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getActiveSheet();
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(HEADERS);
+    sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
+  }
+
+  var now = new Date();
+  var date = Utilities.formatDate(now, TZ, 'yyyy-MM-dd');
+  var time = Utilities.formatDate(now, TZ, 'HH:mm:ss');
+
+  var statusParam = params.status;
+  if (!statusParam) {
+    return ContentService.createTextOutput('Error: No status data received');
+  }
+
+  var statuses = statusParam.split(',');
+  if (statuses.length !== 5) {
+    return ContentService.createTextOutput('Error: Expected 5 status values, got ' + statuses.length);
+  }
+
+  sheet.appendRow([date, time].concat(statuses));
+
+  recordDataReceived(now);
+
+  return ContentService.createTextOutput('Success: Data logged at ' + date + ' ' + time);
+}
+
+// ─── OFFLINE / ONLINE MONITORING ───────────────────────────────────────────────
+
+/**
+ * Called every time fresh ESP8266 data comes in.
+ * Updates the last-seen timestamp and, if the system was previously
+ * flagged as offline, sends a "back online" email and clears the flag.
+ */
+function recordDataReceived(now) {
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty(PROP_LAST_DATA_TS, now.getTime().toString());
+
+  var wasOffline = props.getProperty(PROP_IS_OFFLINE) === 'true';
+  if (wasOffline) {
+    props.setProperty(PROP_IS_OFFLINE, 'false');
+    sendStatusEmail(
+      'Prepress Monitor: Back Online',
+      'Data has started coming in again as of ' + Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm:ss') + '.'
+    );
+  }
+}
+
+/**
+ * Run this on a frequent time-driven trigger (e.g. every 1 minute).
+ * If no data has been received for more than OFFLINE_THRESHOLD_MINUTES,
+ * sends an alert email (only once, until data resumes).
+ */
+function checkDataHealth() {
+  var props = PropertiesService.getScriptProperties();
+  var lastTsStr = props.getProperty(PROP_LAST_DATA_TS);
+
+  // First run ever: just seed the timestamp, nothing to alert on yet.
+  if (!lastTsStr) {
+    props.setProperty(PROP_LAST_DATA_TS, new Date().getTime().toString());
+    return;
+  }
+
+  var lastTs = parseInt(lastTsStr);
+  var minutesSinceLastData = (new Date().getTime() - lastTs) / (60 * 1000);
+  var isOffline = props.getProperty(PROP_IS_OFFLINE) === 'true';
+
+  if (minutesSinceLastData > OFFLINE_THRESHOLD_MINUTES && !isOffline) {
+    props.setProperty(PROP_IS_OFFLINE, 'true');
+    sendStatusEmail(
+      'Prepress Monitor: No Data Received',
+      'No data has been received for over ' + OFFLINE_THRESHOLD_MINUTES + ' minutes. ' +
+      'Last data received at ' + Utilities.formatDate(new Date(lastTs), TZ, 'yyyy-MM-dd HH:mm:ss') + '.'
+    );
+  }
+}
+
+function sendStatusEmail(subject, body) {
+  try {
+    MailApp.sendEmail(MONITOR_EMAIL, subject, body);
+  } catch (err) {
+    Logger.log('Failed to send status email: ' + err.toString());
+  }
+}
+
+// ─── GOOGLE DRIVE BACKUP ───────────────────────────────────────────────────────
+
+/**
+ * Exports the given sheet as a CSV and saves it to the configured Google Drive folder.
+ * File is named like "4 April 2026.csv". Overwrites existing file with same name.
+ */
+function backupSheetToDrive(sheet, sheetLabel) {
+  try {
+    var folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    var fileName = sheetLabel + '.csv';
+
+    // Build CSV content from sheet data
+    var data = sheet.getDataRange().getValues();
+    var csvRows = data.map(function(row) {
+      return row.map(function(cell) {
+        var cellStr = cell instanceof Date
+          ? Utilities.formatDate(cell, TZ, 'yyyy-MM-dd HH:mm:ss')
+          : cell.toString();
+        // Wrap in quotes if contains comma, quote, or newline
+        if (cellStr.indexOf(',') !== -1 || cellStr.indexOf('"') !== -1 || cellStr.indexOf('\n') !== -1) {
+          cellStr = '"' + cellStr.replace(/"/g, '""') + '"';
+        }
+        return cellStr;
+      }).join(',');
+    });
+    var csvContent = csvRows.join('\n');
+
+    // Delete existing file with same name if it exists (overwrite)
+    var existingFiles = folder.getFilesByName(fileName);
+    while (existingFiles.hasNext()) {
+      existingFiles.next().setTrashed(true);
+    }
+
+    // Create new file
+    folder.createFile(fileName, csvContent, MimeType.CSV);
+    Logger.log('Backed up to Drive: ' + fileName);
+
+  } catch (err) {
+    Logger.log('Drive backup failed for "' + sheetLabel + '": ' + err.toString());
+    // Non-fatal: archiving continues even if Drive backup fails
+  }
+}
+
+// ─── AUTO-ARCHIVE (runs via daily time-driven trigger) ─────────────────────────
+
+/**
+ * Archives rows from the main sheet that belong to yesterday (or any past day).
+ * Creates a sheet named like "4 April 2026" for each unique past date found.
+ * Deletes those rows from the main sheet after archiving.
+ * Also saves each archive sheet as a CSV to the configured Google Drive folder.
+ * Also deletes old archive sheets based on Settings sheet configuration.
+ *
+ * Set this function as a daily time-driven trigger (e.g. runs at 00:05 AM).
+ */
+function archivePastDays() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var mainSheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getActiveSheet();
+
+  var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  var data = mainSheet.getDataRange().getValues();
+
+  if (data.length <= 1) return;
+
+  var archiveMap = {};
+  var keepRows = [data[0]];
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var dateVal = row[0];
+    var dateStr = '';
+
+    if (dateVal instanceof Date) {
+      dateStr = Utilities.formatDate(dateVal, TZ, 'yyyy-MM-dd');
+    } else if (typeof dateVal === 'string') {
+      dateStr = dateVal;
+    } else {
+      keepRows.push(row);
+      continue;
+    }
+
+    if (dateStr >= today) {
+      keepRows.push(row);
+    } else {
+      if (!archiveMap[dateStr]) archiveMap[dateStr] = [];
+      archiveMap[dateStr].push(row);
+    }
+  }
+
+  // Write each past date's rows to its own archive sheet + back up to Drive
+  for (var dateKey in archiveMap) {
+    var sheetLabel = formatDateLabel(dateKey); // e.g. "4 April 2026"
+    var archiveSheet = ss.getSheetByName(sheetLabel);
+
+    if (!archiveSheet) {
+      archiveSheet = ss.insertSheet(sheetLabel);
+      archiveSheet.appendRow(HEADERS);
+      archiveSheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
+      ss.setActiveSheet(archiveSheet);
+      ss.moveActiveSheet(ss.getNumSheets());
+    }
+
+    // Append rows avoiding duplicates
+    var existingData = archiveSheet.getDataRange().getValues();
+    var existingSet = {};
+    for (var r = 1; r < existingData.length; r++) {
+      var key = existingData[r][0] + '|' + existingData[r][1];
+      existingSet[key] = true;
+    }
+
+    var rowsToAdd = archiveMap[dateKey].filter(function(row) {
+      var key = row[0] + '|' + row[1];
+      return !existingSet[key];
+    });
+
+    if (rowsToAdd.length > 0) {
+      archiveSheet.getRange(
+        archiveSheet.getLastRow() + 1, 1,
+        rowsToAdd.length, HEADERS.length
+      ).setValues(rowsToAdd);
+    }
+
+    Logger.log('Archived ' + rowsToAdd.length + ' rows to sheet: ' + sheetLabel);
+
+    // ── Back up this archive sheet to Google Drive ──
+    backupSheetToDrive(archiveSheet, sheetLabel);
+  }
+
+  // Rewrite main sheet with only today's rows
+  mainSheet.clearContents();
+  if (keepRows.length > 0) {
+    mainSheet.getRange(1, 1, keepRows.length, HEADERS.length).setValues(keepRows);
+    mainSheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold');
+  }
+
+  Logger.log('Archive complete. Main sheet now has ' + (keepRows.length - 1) + ' rows.');
+
+  deleteOldArchiveSheets();
+}
+
+/**
+ * Deletes archive sheets older than the number of days specified in Settings sheet (cell B1).
+ * Also deletes the corresponding CSV files from Google Drive.
+ */
+function deleteOldArchiveSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var settingsSheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
+
+  if (!settingsSheet) {
+    Logger.log('Settings sheet not found. Skipping auto-delete.');
+    return;
+  }
+
+  var daysToKeep = settingsSheet.getRange('B1').getValue();
+
+  if (!daysToKeep || isNaN(daysToKeep) || daysToKeep <= 0) {
+    Logger.log('Invalid or missing value in Settings B1. Skipping auto-delete.');
+    return;
+  }
+
+  var today = new Date();
+  var cutoffDate = new Date(today.getTime() - (daysToKeep * 24 * 60 * 60 * 1000));
+  var cutoffDateStr = Utilities.formatDate(cutoffDate, TZ, 'yyyy-MM-dd');
+
+  Logger.log('Auto-delete enabled. Keeping sheets from ' + cutoffDateStr + ' onwards (last ' + daysToKeep + ' days).');
+
+  var allSheets = ss.getSheets();
+  var deletedCount = 0;
+
+  for (var i = 0; i < allSheets.length; i++) {
+    var sheet = allSheets[i];
+    var sheetName = sheet.getName();
+
+    if (sheetName === MAIN_SHEET_NAME || sheetName === SETTINGS_SHEET_NAME) continue;
+
+    var sheetDate = parseDateLabel(sheetName);
+
+    if (sheetDate && sheetDate < cutoffDateStr) {
+      Logger.log('Deleting old archive sheet: ' + sheetName + ' (date: ' + sheetDate + ')');
+      ss.deleteSheet(sheet);
+
+      deletedCount++;
+    }
+  }
+
+  Logger.log('Auto-delete complete. Deleted ' + deletedCount + ' old archive sheet(s).');
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+/**
+ * Converts "2026-04-04" → "4 April 2026"
+ */
+function formatDateLabel(dateStr) {
+  var parts = dateStr.split('-');
+  var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  var months = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+  return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+/**
+ * Converts "4 April 2026" → "2026-04-04", returns null if not a valid date label
+ */
+function parseDateLabel(label) {
+  try {
+    var months = {
+      'January':'01','February':'02','March':'03','April':'04',
+      'May':'05','June':'06','July':'07','August':'08',
+      'September':'09','October':'10','November':'11','December':'12'
+    };
+    var parts = label.trim().split(' ');
+    if (parts.length !== 3) return null;
+    var month = months[parts[1]];
+    if (!month) return null;
+    var day = parts[0].length === 1 ? '0' + parts[0] : parts[0];
+    return parts[2] + '-' + month + '-' + day;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Call this ONCE manually to set up all triggers:
+ *  1. Daily archive trigger — moves yesterday's (and any past) rows to their own
+ *     sheet, backs each archive sheet up as a CSV to Drive, and deletes archive
+ *     sheets older than the "days to keep" value in Settings!B1 (the Drive CSV
+ *     backups are NEVER deleted, only the in-sheet archive).
+ *  2. Data health-check trigger — runs every minute; if no ESP8266 data has been
+ *     received for more than OFFLINE_THRESHOLD_MINUTES, emails MONITOR_EMAIL.
+ *     When data resumes, a "back online" email is sent automatically.
+ */
+function createTriggers() {
+  // Remove any existing triggers for these handlers first (avoid duplicates)
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    var fn = t.getHandlerFunction();
+    if (fn === 'archivePastDays' || fn === 'checkDataHealth') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  // 1. Daily archive trigger — runs once a day just after midnight
+  ScriptApp.newTrigger('archivePastDays')
+    .timeBased()
+    .everyDays(1)
+    .atHour(0)
+    .nearMinute(5)
+    .create();
+
+  // 2. Data health-check trigger — runs every minute to catch a >5min gap quickly
+  ScriptApp.newTrigger('checkDataHealth')
+    .timeBased()
+    .everyMinutes(1)
+    .create();
+
+  Logger.log('Triggers created successfully: archivePastDays (daily) + checkDataHealth (every 1 min).');
+}
+
+// ─── DATA FETCHING ─────────────────────────────────────────────────────────────
+
+function handleGetData(fromDate, toDate, prepressNum, todayOnly) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var allRows = [];
+    var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+
+    if (todayOnly === 'true') {
+      var mainSheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getActiveSheet();
+      allRows = getRowsFromSheet(mainSheet);
+    } else {
+      // Walk every date in the requested range. "Today" (not yet archived)
+      // is read live from the main sheet; every past date is read straight
+      // from its backed-up CSV in Drive, which is fast and never gets
+      // pruned the way archive tabs do.
+      var dateList = getDateListInRange(fromDate, toDate);
+      for (var d = 0; d < dateList.length; d++) {
+        var dateStr = dateList[d];
+        if (dateStr === today) {
+          var liveSheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getActiveSheet();
+          allRows = allRows.concat(getRowsFromSheet(liveSheet));
+        } else {
+          var driveRows = getRowsFromDriveDate(dateStr);
+          if (driveRows === null) {
+            // CSV missing from Drive for some reason — fall back to the
+            // archive tab (if it still exists) so nothing is silently lost.
+            var fallbackSheet = ss.getSheetByName(formatDateLabel(dateStr));
+            if (fallbackSheet) allRows = allRows.concat(getRowsFromSheet(fallbackSheet));
+          } else {
+            allRows = allRows.concat(driveRows);
+          }
+        }
+      }
+    }
+
+    if (allRows.length === 0) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ data: [] }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var result = processSessions(allRows, fromDate, toDate, parseInt(prepressNum));
+
+    Logger.log('Found ' + result.length + ' sessions');
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ data: result }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    Logger.log('Error in handleGetData: ' + error.toString());
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Returns every 'yyyy-MM-dd' date string from fromDate to toDate inclusive.
+ */
+function getDateListInRange(fromDate, toDate) {
+  var dates = [];
+  var fp = fromDate.split('-');
+  var tp = toDate.split('-');
+  var cur = new Date(+fp[0], +fp[1] - 1, +fp[2]);
+  var end = new Date(+tp[0], +tp[1] - 1, +tp[2]);
+
+  while (cur <= end) {
+    dates.push(Utilities.formatDate(cur, TZ, 'yyyy-MM-dd'));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+}
+
+// ─── DRIVE-BACKED HISTORICAL DATA ──────────────────────────────────────────────
+
+/**
+ * Reads and parses the "D Month YYYY.csv" backup for a single date straight
+ * from the Drive folder. Returns an array of row objects in the same shape
+ * getRowsFromSheet() produces, or null if no CSV exists for that date.
+ * Cached in-memory per script execution so repeated dates in one request
+ * (or repeated calls) don't re-hit Drive.
+ */
+var _driveDateCache = {};
+function getRowsFromDriveDate(dateStr) {
+  if (_driveDateCache.hasOwnProperty(dateStr)) return _driveDateCache[dateStr];
+
+  var rows = null;
+  try {
+    var fileName = formatDateLabel(dateStr) + '.csv';
+    var folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    var files = folder.getFilesByName(fileName);
+
+    if (files.hasNext()) {
+      var file = files.next();
+      var csvText = file.getBlob().getDataAsString('UTF-8');
+      rows = parseCsvRowsForDate(csvText, dateStr);
+    }
+  } catch (err) {
+    Logger.log('Drive read failed for date ' + dateStr + ': ' + err.toString());
+    rows = null;
+  }
+
+  _driveDateCache[dateStr] = rows;
+  return rows;
+}
+
+/**
+ * Parses raw CSV text (as written by backupSheetToDrive) into row objects.
+ * Handles the two quirks visible in the backed-up files:
+ *  - Date column is a full timestamp like "2026-08-25 00:00:00" (only the
+ *    date part before the space matters).
+ *  - Time column is a Sheets "time of day" serialized as a fake date like
+ *    "1899-12-30 14:23:05" (only the time part after the space matters).
+ */
+function parseCsvRowsForDate(csvText, expectedDateStr) {
+  var table = Utilities.parseCsv(csvText);
+  if (!table || table.length <= 1) return [];
+
+  var rows = [];
+  for (var i = 1; i < table.length; i++) { // skip header row
+    var cols = table[i];
+    if (!cols || cols.length < 7) continue;
+
+    var dateStr = String(cols[0]).split(' ')[0];
+    var timeParts = String(cols[1]).split(' ');
+    var timeStr = timeParts.length > 1 ? timeParts[1] : timeParts[0];
+
+    if (!dateStr) continue;
+
+    rows.push({
+      dateStr: dateStr,
+      timeStr: timeStr,
+      datetime: dateStr + ' ' + timeStr,
+      cols: cols
+    });
+  }
+
+  rows.sort(function(a, b) {
+    return a.datetime.localeCompare(b.datetime);
+  });
+
+  return rows;
+}
+
+function getRowsFromSheet(sheet) {
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+
+  var rows = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var dateVal = row[0];
+    var timeVal = row[1];
+
+    var dateStr = '';
+    if (dateVal instanceof Date) {
+      dateStr = Utilities.formatDate(dateVal, TZ, 'yyyy-MM-dd');
+    } else if (typeof dateVal === 'string') {
+      dateStr = dateVal;
+    } else {
+      continue;
+    }
+
+    var timeStr = '';
+    if (timeVal instanceof Date) {
+      timeStr = Utilities.formatDate(timeVal, TZ, 'HH:mm:ss');
+    } else if (typeof timeVal === 'string') {
+      timeStr = timeVal;
+    } else {
+      var totalSeconds = Math.round(timeVal * 24 * 60 * 60);
+      var h = Math.floor(totalSeconds / 3600);
+      var m = Math.floor((totalSeconds % 3600) / 60);
+      var s = totalSeconds % 60;
+      timeStr = pad(h) + ':' + pad(m) + ':' + pad(s);
+    }
+
+    rows.push({
+      dateStr: dateStr,
+      timeStr: timeStr,
+      datetime: dateStr + ' ' + timeStr,
+      cols: row
+    });
+  }
+
+  rows.sort(function(a, b) {
+    return a.datetime.localeCompare(b.datetime);
+  });
+
+  return rows;
+}
+
+function processSessions(rows, fromDate, toDate, prepressCol) {
+  var result = [];
+  var currentSession = null;
+
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+
+    if (row.dateStr < fromDate || row.dateStr > toDate) continue;
+
+    var status = row.cols[prepressCol];
+    var datetime = row.datetime;
+
+    if (status === 'closed') {
+      if (!currentSession) {
+        currentSession = { closedFrom: datetime, closedTo: datetime };
+      } else {
+        currentSession.closedTo = datetime;
+      }
+    } else if (status === 'open' && currentSession) {
+      var durationMs = calculateDuration(currentSession.closedFrom, currentSession.closedTo);
+      result.push({
+        closedFrom: currentSession.closedFrom,
+        closedTo: currentSession.closedTo,
+        duration: formatDuration(durationMs),
+        durationMs: durationMs
+      });
+      currentSession = null;
+    }
+  }
+
+  if (currentSession) {
+    var durationMs = calculateDuration(currentSession.closedFrom, currentSession.closedTo);
+    result.push({
+      closedFrom: currentSession.closedFrom,
+      closedTo: currentSession.closedTo + ' (ongoing)',
+      duration: formatDuration(durationMs),
+      durationMs: durationMs
+    });
+  }
+
+  for (var i = 0; i < result.length - 1; i++) {
+    var currentEnd = result[i].closedTo.replace(' (ongoing)', '');
+    var nextStart = result[i + 1].closedFrom;
+    var idleMs = calculateDuration(currentEnd, nextStart);
+    result[i].idle = formatDuration(idleMs);
+    result[i].idleMs = idleMs;
+  }
+
+  if (result.length > 0 && !result[result.length - 1].idle) {
+    result[result.length - 1].idle = '-';
+    result[result.length - 1].idleMs = 0;
+  }
+
+  return result;
+}
+
+function calculateDuration(fromDatetime, toDatetime) {
+  try {
+    var fromParts = fromDatetime.split(' ');
+    var toParts = toDatetime.split(' ');
+    var fd = fromParts[0].split('-');
+    var ft = fromParts[1].split(':');
+    var td = toParts[0].split('-');
+    var tt = toParts[1].split(':');
+
+    var from = new Date(+fd[0], +fd[1]-1, +fd[2], +ft[0], +ft[1], +ft[2]);
+    var to   = new Date(+td[0], +td[1]-1, +td[2], +tt[0], +tt[1], +tt[2]);
+
+    var ms = to.getTime() - from.getTime();
+    return ms < 0 ? 0 : ms;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function formatDuration(ms) {
+  if (ms < 0 || isNaN(ms)) ms = 0;
+  var seconds = Math.floor(ms / 1000);
+  var minutes = Math.floor(seconds / 60);
+  var hours   = Math.floor(minutes / 60);
+  var days    = Math.floor(hours / 24);
+
+  hours   = hours % 24;
+  minutes = minutes % 60;
+  seconds = seconds % 60;
+
+  var parts = [];
+  if (days    > 0) parts.push(days    + 'd');
+  if (hours   > 0) parts.push(hours   + 'h');
+  if (minutes > 0) parts.push(minutes + 'm');
+  if (seconds > 0 || parts.length === 0) parts.push(seconds + 's');
+
+  return parts.join(' ');
+}
+
+function pad(num) {
+  return (num < 10 ? '0' : '') + num;
+}
+
+// ─── MANUAL TESTS ─────────────────────────────────────────────────────────────
+
+function testGetData() {
+  var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  var result = handleGetData(today, today, '2', 'true');
+  Logger.log(result.getContent());
+}
+
+function testArchive() {
+  archivePastDays();
+}
+
+/**
+ * Manual test: fetch a past date's data straight from Drive and log it.
+ * Change the date below to any date you know has a CSV in the folder.
+ */
+function testGetDataFromDrive() {
+  var result = handleGetData('2026-08-24', '2026-08-24', '2', 'false');
+  Logger.log(result.getContent());
+}
+
+function testDeleteOldSheets() {
+  deleteOldArchiveSheets();
+}
+
+/**
+ * Manual one-time backup: backs up ALL existing archive sheets to Drive.
+ * Run this once if you want to sync sheets that were archived before Drive backup was added.
+ */
+function backupAllExistingArchivesToDrive() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var allSheets = ss.getSheets();
+  var count = 0;
+
+  for (var i = 0; i < allSheets.length; i++) {
+    var sheet = allSheets[i];
+    var name = sheet.getName();
+    if (name === MAIN_SHEET_NAME || name === SETTINGS_SHEET_NAME) continue;
+
+    var sheetDate = parseDateLabel(name);
+    if (sheetDate) {
+      backupSheetToDrive(sheet, name);
+      count++;
+    }
+  }
+
+  Logger.log('Bulk backup complete. Backed up ' + count + ' archive sheet(s) to Drive.');
+}

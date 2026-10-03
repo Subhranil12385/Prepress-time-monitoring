@@ -1,0 +1,386 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// PREPRESS DATA FETCH API — standalone script, READ-ONLY.
+// This project does NOT receive ESP8266 pushes and does NOT touch the sheet
+// or trigger any writes. Its only job is answering the dashboard's
+// ?action=getData requests. Deploy this as its own Web App with its own URL,
+// then point the dashboard's SCRIPT_URL at that new URL.
+// The MCU logging script stays exactly as it was — nothing there changes.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── CONFIG — fill these in ────────────────────────────────────────────────
+var SPREADSHEET_ID = '1zi2Uy03MUamV8RLK4u9mcHJH65Itfkxl3YiJ6FV2idk'; // from the sheet's URL, used ONLY to read today's live rows
+var MAIN_SHEET_NAME = 'Sheet1';
+var DRIVE_FOLDER_ID = '1NhWl8XSChN-iTUpXZFYY--yfRTY5rg8c';
+var TZ = Session.getScriptTimeZone();
+
+// ─── ROUTING ────────────────────────────────────────────────────────────────
+
+function doGet(e) {
+  try {
+    var params = e.parameter || {};
+    if (params.action === 'getData') {
+      return handleGetData(params.fromDate, params.toDate, params.prepress, params.todayOnly);
+    }
+    return ContentService.createTextOutput(JSON.stringify({ error: 'Unknown action' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    Logger.log('Error in doGet: ' + error.toString());
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ─── DATA FETCHING ───────────────────────────────────────────────────────────
+
+function handleGetData(fromDate, toDate, prepressNum, todayOnly) {
+  try {
+    var allRows = [];
+    var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+
+    if (todayOnly === 'true') {
+      allRows = getRowsFromLiveSheet();
+    } else {
+      var dateList = getDateListInRange(fromDate, toDate);
+      for (var d = 0; d < dateList.length; d++) {
+        var dateStr = dateList[d];
+        if (dateStr === today) {
+          allRows = allRows.concat(getRowsFromLiveSheet());
+        } else {
+          var driveRows = getRowsFromDriveDate(dateStr);
+          if (driveRows) allRows = allRows.concat(driveRows);
+        }
+      }
+    }
+
+    if (allRows.length === 0) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ data: [] }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var result = processSessions(allRows, fromDate || '0000-00-00', toDate || '9999-99-99', parseInt(prepressNum));
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ data: result }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    Logger.log('Error in handleGetData: ' + error.toString());
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Reads today's not-yet-archived rows live from the spreadsheet.
+ * Read-only — never writes, never trashed, never triggers anything.
+ */
+function getRowsFromLiveSheet() {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getActiveSheet();
+    return getRowsFromSheet(sheet);
+  } catch (err) {
+    Logger.log('Could not read live sheet (check SPREADSHEET_ID): ' + err.toString());
+    return [];
+  }
+}
+
+function getRowsFromSheet(sheet) {
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+
+  var rows = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var dateVal = row[0];
+    var timeVal = row[1];
+
+    var dateStr = '';
+    if (dateVal instanceof Date) {
+      dateStr = Utilities.formatDate(dateVal, TZ, 'yyyy-MM-dd');
+    } else if (typeof dateVal === 'string') {
+      dateStr = dateVal;
+    } else {
+      continue;
+    }
+
+    var timeStr = '';
+    if (timeVal instanceof Date) {
+      timeStr = Utilities.formatDate(timeVal, TZ, 'HH:mm:ss');
+    } else if (typeof timeVal === 'string') {
+      timeStr = timeVal;
+    } else {
+      var totalSeconds = Math.round(timeVal * 24 * 60 * 60);
+      var h = Math.floor(totalSeconds / 3600);
+      var m = Math.floor((totalSeconds % 3600) / 60);
+      var s = totalSeconds % 60;
+      timeStr = pad(h) + ':' + pad(m) + ':' + pad(s);
+    }
+
+    rows.push({
+      dateStr: dateStr,
+      timeStr: timeStr,
+      datetime: dateStr + ' ' + timeStr,
+      cols: row
+    });
+  }
+
+  rows.sort(function(a, b) {
+    return a.datetime.localeCompare(b.datetime);
+  });
+
+  return rows;
+}
+
+// ─── DRIVE-BACKED HISTORICAL DATA ──────────────────────────────────────────────
+
+/**
+ * Returns every 'yyyy-MM-dd' date string from fromDate to toDate inclusive.
+ */
+function getDateListInRange(fromDate, toDate) {
+  var dates = [];
+  var fp = fromDate.split('-');
+  var tp = toDate.split('-');
+  var cur = new Date(+fp[0], +fp[1] - 1, +fp[2]);
+  var end = new Date(+tp[0], +tp[1] - 1, +tp[2]);
+
+  while (cur <= end) {
+    dates.push(Utilities.formatDate(cur, TZ, 'yyyy-MM-dd'));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+}
+
+/**
+ * Builds (once per execution) a map of "22 august 2026" -> File, by scanning
+ * the whole folder a single time. This avoids exact-name-match misses from
+ * getFilesByName (stray spaces, casing, etc.) that were silently dropping
+ * dates like 22/23 Aug on you before.
+ */
+var _folderFileIndex = null;
+function getFolderFileIndex() {
+  if (_folderFileIndex) return _folderFileIndex;
+
+  _folderFileIndex = {};
+  var folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  var files = folder.getFiles();
+  while (files.hasNext()) {
+    var file = files.next();
+    var name = file.getName();
+    if (!/\.csv$/i.test(name)) continue;
+    var key = name.replace(/\.csv$/i, '').trim().toLowerCase().replace(/\s+/g, ' ');
+    _folderFileIndex[key] = file;
+  }
+  return _folderFileIndex;
+}
+
+/**
+ * Reads and parses the "D Month YYYY.csv" backup for a single date straight
+ * from the Drive folder. Returns an array of row objects, or null if no CSV
+ * exists for that date.
+ */
+var _driveDateCache = {};
+function getRowsFromDriveDate(dateStr) {
+  if (_driveDateCache.hasOwnProperty(dateStr)) return _driveDateCache[dateStr];
+
+  var rows = null;
+  try {
+    var label = formatDateLabel(dateStr).trim().toLowerCase().replace(/\s+/g, ' ');
+    var index = getFolderFileIndex();
+    var file = index[label];
+
+    if (file) {
+      var csvText = file.getBlob().getDataAsString('UTF-8');
+      rows = parseCsvRowsForDate(csvText);
+    } else {
+      Logger.log('No Drive CSV found for date ' + dateStr + ' (looked for "' + label + '.csv")');
+    }
+  } catch (err) {
+    Logger.log('Drive read failed for date ' + dateStr + ': ' + err.toString());
+    rows = null;
+  }
+
+  _driveDateCache[dateStr] = rows;
+  return rows;
+}
+
+/**
+ * Parses raw CSV text (as written by the logging script's backupSheetToDrive)
+ * into row objects. Handles the two quirks in the backed-up files:
+ *  - Date column is a full timestamp like "2026-08-25 00:00:00" (only the
+ *    date part before the space matters).
+ *  - Time column is a Sheets "time of day" serialized as a fake date like
+ *    "1899-12-30 14:23:05" (only the time part after the space matters).
+ */
+function parseCsvRowsForDate(csvText) {
+  var table = Utilities.parseCsv(csvText);
+  if (!table || table.length <= 1) return [];
+
+  var rows = [];
+  for (var i = 1; i < table.length; i++) { // skip header row
+    var cols = table[i];
+    if (!cols || cols.length < 7) continue;
+
+    var dateStr = String(cols[0]).split(' ')[0];
+    var timeParts = String(cols[1]).split(' ');
+    var timeStr = timeParts.length > 1 ? timeParts[1] : timeParts[0];
+
+    if (!dateStr) continue;
+
+    rows.push({
+      dateStr: dateStr,
+      timeStr: timeStr,
+      datetime: dateStr + ' ' + timeStr,
+      cols: cols
+    });
+  }
+
+  rows.sort(function(a, b) {
+    return a.datetime.localeCompare(b.datetime);
+  });
+
+  return rows;
+}
+
+// ─── SESSION PROCESSING (same logic/output shape as before) ───────────────────
+
+function processSessions(rows, fromDate, toDate, prepressCol) {
+  var result = [];
+  var currentSession = null;
+
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+
+    if (row.dateStr < fromDate || row.dateStr > toDate) continue;
+
+    var status = row.cols[prepressCol];
+    var datetime = row.datetime;
+
+    if (status === 'closed') {
+      if (!currentSession) {
+        currentSession = { closedFrom: datetime, closedTo: datetime };
+      } else {
+        currentSession.closedTo = datetime;
+      }
+    } else if (status === 'open' && currentSession) {
+      var durationMs = calculateDuration(currentSession.closedFrom, currentSession.closedTo);
+      result.push({
+        closedFrom: currentSession.closedFrom,
+        closedTo: currentSession.closedTo,
+        duration: formatDuration(durationMs),
+        durationMs: durationMs
+      });
+      currentSession = null;
+    }
+  }
+
+  if (currentSession) {
+    var durationMs2 = calculateDuration(currentSession.closedFrom, currentSession.closedTo);
+    result.push({
+      closedFrom: currentSession.closedFrom,
+      closedTo: currentSession.closedTo + ' (ongoing)',
+      duration: formatDuration(durationMs2),
+      durationMs: durationMs2
+    });
+  }
+
+  for (var j = 0; j < result.length - 1; j++) {
+    var currentEnd = result[j].closedTo.replace(' (ongoing)', '');
+    var nextStart = result[j + 1].closedFrom;
+    var idleMs = calculateDuration(currentEnd, nextStart);
+    result[j].idle = formatDuration(idleMs);
+    result[j].idleMs = idleMs;
+  }
+
+  if (result.length > 0 && !result[result.length - 1].idle) {
+    result[result.length - 1].idle = '-';
+    result[result.length - 1].idleMs = 0;
+  }
+
+  return result;
+}
+
+function calculateDuration(fromDatetime, toDatetime) {
+  try {
+    var fromParts = fromDatetime.split(' ');
+    var toParts = toDatetime.split(' ');
+    var fd = fromParts[0].split('-');
+    var ft = fromParts[1].split(':');
+    var td = toParts[0].split('-');
+    var tt = toParts[1].split(':');
+
+    var from = new Date(+fd[0], +fd[1]-1, +fd[2], +ft[0], +ft[1], +ft[2]);
+    var to   = new Date(+td[0], +td[1]-1, +td[2], +tt[0], +tt[1], +tt[2]);
+
+    var ms = to.getTime() - from.getTime();
+    return ms < 0 ? 0 : ms;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function formatDuration(ms) {
+  if (ms < 0 || isNaN(ms)) ms = 0;
+  var seconds = Math.floor(ms / 1000);
+  var minutes = Math.floor(seconds / 60);
+  var hours   = Math.floor(minutes / 60);
+  var days    = Math.floor(hours / 24);
+
+  hours   = hours % 24;
+  minutes = minutes % 60;
+  seconds = seconds % 60;
+
+  var parts = [];
+  if (days    > 0) parts.push(days    + 'd');
+  if (hours   > 0) parts.push(hours   + 'h');
+  if (minutes > 0) parts.push(minutes + 'm');
+  if (seconds > 0 || parts.length === 0) parts.push(seconds + 's');
+
+  return parts.join(' ');
+}
+
+function pad(num) {
+  return (num < 10 ? '0' : '') + num;
+}
+
+/**
+ * Converts "2026-04-04" → "4 April 2026" — must match the naming the
+ * logging script uses when it writes CSVs to Drive.
+ */
+function formatDateLabel(dateStr) {
+  var parts = dateStr.split('-');
+  var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  var months = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+  return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+// ─── DIAGNOSTICS — run these manually from the Apps Script editor ─────────────
+
+/**
+ * Lists every CSV filename this script actually sees in the Drive folder.
+ * Run this first if a date still looks missing — check the exact name Drive
+ * has for that date against what formatDateLabel() would generate.
+ */
+function debugListDriveFiles() {
+  var folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  var files = folder.getFiles();
+  var names = [];
+  while (files.hasNext()) {
+    names.push(files.next().getName());
+  }
+  names.sort();
+  Logger.log(names.length + ' CSV files found:\n' + names.join('\n'));
+}
+
+/**
+ * Test fetching a specific date range end-to-end, exactly as the dashboard
+ * would call it. Adjust the dates/prepress column and check the log.
+ */
+function debugTestGetData() {
+  var result = handleGetData('2026-08-22', '2026-08-24', '2', 'false');
+  Logger.log(result.getContent());
+}
